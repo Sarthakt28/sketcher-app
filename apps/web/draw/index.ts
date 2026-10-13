@@ -1106,142 +1106,10 @@ export function initDraw(
                 }
             };
 
-            // Multi-touch gesture and touch drawing state
-            let touchStartDist = 0;
-            let touchStartZoom = 1;
-            let touchStartPanX = 0;
-            let touchStartPanY = 0;
-            let touchCenterStart = { x: 0, y: 0 };
-            let isTouchGesturing = false;
-            let gestureJustEnded = false;
-
-            const handleTouchStart = (e: TouchEvent) => {
-                if (e.touches.length === 2) {
-                    if (e.cancelable) e.preventDefault();
-                    isTouchGesturing = true;
-                    gestureJustEnded = false;
-                    
-                    // Cancel any in-progress single-finger drawing
-                    clicked = false;
-                    isPanning = false;
-                    isDragging = false;
-                    isResizing = false;
-                    currentPencilPoints = [];
-                    currentEraserPoints = [];
-
-                    const t1 = e.touches[0];
-                    const t2 = e.touches[1];
-                    if (t1 && t2) {
-                        touchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-                        touchCenterStart = {
-                            x: (t1.clientX + t2.clientX) / 2,
-                            y: (t1.clientY + t2.clientY) / 2
-                        };
-                        touchStartZoom = zoom;
-                        touchStartPanX = panX;
-                        touchStartPanY = panY;
-                    }
-                    return;
-                }
-
-                if (e.touches.length === 1 && !isTouchGesturing) {
-                    // If a gesture just ended (lifted one finger but one remains), 
-                    // don't start drawing with the remaining finger
-                    if (gestureJustEnded) {
-                        return;
-                    }
-                    const touch = e.touches[0];
-                    if (touch) {
-                        if (e.cancelable) e.preventDefault();
-                        handleMouseDown({
-                            clientX: touch.clientX,
-                            clientY: touch.clientY,
-                            button: 0,
-                            preventDefault: () => {}
-                        } as any);
-                    }
-                }
-            };
-
-            const handleTouchMove = (e: TouchEvent) => {
-                if (e.touches.length === 2 && isTouchGesturing && touchStartDist > 0) {
-                    if (e.cancelable) e.preventDefault();
-                    const t1 = e.touches[0];
-                    const t2 = e.touches[1];
-                    if (t1 && t2) {
-                        const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-                        const currentCenter = {
-                            x: (t1.clientX + t2.clientX) / 2,
-                            y: (t1.clientY + t2.clientY) / 2
-                        };
-
-                        const scaleFactor = currentDist / touchStartDist;
-                        const newZoom = Math.min(Math.max(touchStartZoom * scaleFactor, 0.1), 20);
-
-                        const worldCenterX = (touchCenterStart.x - touchStartPanX) / touchStartZoom;
-                        const worldCenterY = (touchCenterStart.y - touchStartPanY) / touchStartZoom;
-
-                        zoom = newZoom;
-                        panX = currentCenter.x - worldCenterX * zoom;
-                        panY = currentCenter.y - worldCenterY * zoom;
-
-                        clearCanvas();
-                        onViewChange?.(zoom, panX, panY);
-                    }
-                    return;
-                }
-
-                if (e.touches.length === 1 && !isTouchGesturing && !gestureJustEnded) {
-                    const touch = e.touches[0];
-                    if (touch) {
-                        if (e.cancelable) e.preventDefault();
-                        handleMouseMove({
-                            clientX: touch.clientX,
-                            clientY: touch.clientY,
-                            preventDefault: () => {}
-                        } as any);
-                    }
-                }
-            };
-
-            const handleTouchEnd = (e: TouchEvent) => {
-                if (isTouchGesturing) {
-                    if (e.touches.length < 2) {
-                        // Gesture is over - mark it so remaining finger doesn't draw
-                        isTouchGesturing = false;
-                        touchStartDist = 0;
-                        gestureJustEnded = true;
-                    }
-                    // Don't fire handleMouseUp for gesture touches
-                    return;
-                }
-
-                if (e.touches.length === 0) {
-                    if (gestureJustEnded) {
-                        // This is the final lift after a gesture — don't create a shape
-                        gestureJustEnded = false;
-                        return;
-                    }
-                    const touch = e.changedTouches[0];
-                    if (touch) {
-                        if (e.cancelable) e.preventDefault();
-                        handleMouseUp({
-                            clientX: touch.clientX,
-                            clientY: touch.clientY,
-                            preventDefault: () => {}
-                        } as any);
-                    }
-                }
-            };
-
             canvas.addEventListener("mousedown", handleMouseDown);
             canvas.addEventListener("mouseup", handleMouseUp);
             canvas.addEventListener("mousemove", handleMouseMove);
             canvas.addEventListener("mouseleave", handleMouseLeave);
-            canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
-            canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
-            canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
-            canvas.addEventListener("touchcancel", handleTouchEnd, { passive: false });
             canvas.addEventListener("wheel", handleWheel, { passive: false });
             window.addEventListener("keydown", handleKeyDown);
             window.addEventListener("keyup", handleKeyUp);
@@ -1313,10 +1181,6 @@ export function initDraw(
                     canvas.removeEventListener("mouseup", handleMouseUp);
                     canvas.removeEventListener("mousemove", handleMouseMove);
                     canvas.removeEventListener("mouseleave", handleMouseLeave);
-                    canvas.removeEventListener("touchstart", handleTouchStart);
-                    canvas.removeEventListener("touchmove", handleTouchMove);
-                    canvas.removeEventListener("touchend", handleTouchEnd);
-                    canvas.removeEventListener("touchcancel", handleTouchEnd);
                     canvas.removeEventListener("wheel", handleWheel);
                     window.removeEventListener("keydown", handleKeyDown);
                     window.removeEventListener("keyup", handleKeyUp);
