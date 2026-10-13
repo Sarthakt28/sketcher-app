@@ -1364,8 +1364,7 @@ async function getExistingShapes(roomId: string): Promise<Shape[]> {
                     shapes.push(parsed as Shape);
                 }
             } catch (e) {
-                // Skip any corrupt/non-shape message rows silently
-                console.warn("[Draw] Skipping unparseable message from DB:", x.message);
+                // Skip plain text chat messages and non-shape records silently
             }
         }
 

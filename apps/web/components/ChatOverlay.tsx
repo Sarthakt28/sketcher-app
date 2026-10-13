@@ -72,6 +72,23 @@ export function ChatOverlay({
   // Active display name
   const activeMyName: string = chatUserName || (userEmail && userEmail !== "dev-user@example.com" ? (userEmail.includes("@") ? userEmail.split("@")[0]! : userEmail) : "");
 
+// Helper to detect if a message string is a serialized canvas shape JSON
+function isShapeMessage(msgStr: string): boolean {
+  if (!msgStr || typeof msgStr !== "string") return false;
+  const trimmed = msgStr.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
+  try {
+    const parsed = JSON.parse(trimmed);
+    const shapeTypes = ["rect", "circle", "arrow", "triangle", "pencil", "text", "eraser"];
+    if (parsed && typeof parsed === "object" && shapeTypes.includes(parsed.type)) {
+      return true;
+    }
+  } catch (e) {
+    return false;
+  }
+  return false;
+}
+
   // Fetch initial chat history from backend on mount
   useEffect(() => {
     let active = true;
@@ -79,19 +96,24 @@ export function ChatOverlay({
       try {
         const response = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
         if (active && Array.isArray(response.data?.messages)) {
-          const loaded: ChatMessage[] = response.data.messages.map((m: any) => {
-            const rawSender = m.user?.name || m.user?.email || "Member";
-            const cleanSender = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
-            const isMe = (activeMyName && cleanSender.toLowerCase() === activeMyName.toLowerCase()) || (m.user?.email === userEmail);
+          // Filter out canvas vector shapes so only actual chat messages are shown
+          const loaded: ChatMessage[] = response.data.messages
+            .filter((m: any) => !isShapeMessage(m.message))
+            .map((m: any) => {
+              const rawSender = m.user?.name || m.user?.email || "Member";
+              const cleanSender = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
+              const isMe = (activeMyName && cleanSender.toLowerCase() === activeMyName.toLowerCase()) || (m.user?.email === userEmail);
 
-            return {
-              id: String(m.id || Math.random()),
-              senderName: cleanSender,
-              message: m.message || "",
-              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              isSelf: isMe
-            };
-          });
+              return {
+                id: String(m.id || Math.random()),
+                senderName: cleanSender,
+                message: m.message || "",
+                timestamp: m.createdAt
+                  ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                isSelf: isMe
+              };
+            });
           setMessages(loaded);
         }
       } catch (err) {
@@ -124,6 +146,9 @@ export function ChatOverlay({
       try {
         const data = JSON.parse(event.data);
         if (data.type === "user_text_message") {
+          // Guard: ignore if payload is a serialized shape
+          if (isShapeMessage(data.message)) return;
+
           const rawSender = data.senderName || "Member";
           const cleanSender = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
           const isMe = activeMyName ? (cleanSender.toLowerCase() === activeMyName.toLowerCase() || rawSender === userEmail) : false;
