@@ -154,13 +154,17 @@ wss.on("connection", function connection(ws, request) {
         }
       });
 
-      // 2. Persist text message to database
+      // 2. Persist text message to database (including senderName for history)
       const numericRoomId = parseInt(roomId);
       const numericUserId = parseInt(userId);
       if (!isNaN(numericRoomId) && !isNaN(numericUserId)) {
         prismaClient.chat.create({
           data: {
-            message,
+            message: JSON.stringify({
+              type: "chat_text",
+              text: message,
+              senderName: senderName
+            }),
             roomId: numericRoomId,
             userId: numericUserId
           }

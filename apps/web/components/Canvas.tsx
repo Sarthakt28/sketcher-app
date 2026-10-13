@@ -516,7 +516,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                 {/* Chat Panel Toggle Button */}
                 <button
                     onClick={() => setChatOpen(!chatOpen)}
-                    title={isPremiumUser() ? "Toggle Live Chat" : "Sign In to Unlock Live Chat"}
+                    title="Toggle Live Chat"
                     className={`
                         relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ease-out cursor-pointer hover:scale-105 active:scale-95
                         ${chatOpen
@@ -526,11 +526,6 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                     `}
                 >
                     <MessageSquare size={18} strokeWidth={2.2} />
-                    {!isPremiumUser() && (
-                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-yellow-500 text-black flex items-center justify-center text-[9px] font-extrabold border border-black shadow">
-                            🔒
-                        </span>
-                    )}
                 </button>
             </div>
 

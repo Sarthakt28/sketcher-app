@@ -17,20 +17,18 @@ export function ChatOverlay({
   socket,
   roomId,
   userEmail,
-  isLoggedIn,
   isOpen,
   onToggle
 }: {
   socket: WebSocket | null;
   roomId: string;
   userEmail: string;
-  isLoggedIn: boolean;
+  isLoggedIn?: boolean;
   isOpen: boolean;
   onToggle: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
-  const [unreadCount, setUnreadCount] = useState(0);
   
   // User name state
   const [chatUserName, setChatUserName] = useState<string>("");
@@ -72,21 +70,37 @@ export function ChatOverlay({
   // Active display name
   const activeMyName: string = chatUserName || (userEmail && userEmail !== "dev-user@example.com" ? (userEmail.includes("@") ? userEmail.split("@")[0]! : userEmail) : "");
 
-// Helper to detect if a message string is a serialized canvas shape JSON
-function isShapeMessage(msgStr: string): boolean {
-  if (!msgStr || typeof msgStr !== "string") return false;
-  const trimmed = msgStr.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
-  try {
-    const parsed = JSON.parse(trimmed);
-    const shapeTypes = ["rect", "circle", "arrow", "triangle", "pencil", "text", "eraser"];
-    if (parsed && typeof parsed === "object" && shapeTypes.includes(parsed.type)) {
-      return true;
-    }
-  } catch (e) {
-    return false;
+// Helper to extract message text, senderName, and determine if it's a shape
+function parseDbMessage(raw: string, fallbackSender: string): { isShape: boolean; text: string; senderName: string } {
+  if (!raw || typeof raw !== "string") {
+    return { isShape: false, text: "", senderName: fallbackSender };
   }
-  return false;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object") {
+        if (parsed.type === "chat_text") {
+          return {
+            isShape: false,
+            text: parsed.text || "",
+            senderName: parsed.senderName || fallbackSender
+          };
+        }
+        const shapeTypes = ["rect", "circle", "arrow", "triangle", "pencil", "text", "eraser"];
+        if (shapeTypes.includes(parsed.type)) {
+          return { isShape: true, text: "", senderName: "" };
+        }
+      }
+    } catch (e) {
+      // not valid JSON, treat as regular text
+    }
+  }
+  return {
+    isShape: false,
+    text: raw,
+    senderName: fallbackSender
+  };
 }
 
   // Fetch initial chat history from backend on mount
@@ -96,24 +110,26 @@ function isShapeMessage(msgStr: string): boolean {
       try {
         const response = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
         if (active && Array.isArray(response.data?.messages)) {
-          // Filter out canvas vector shapes so only actual chat messages are shown
-          const loaded: ChatMessage[] = response.data.messages
-            .filter((m: any) => !isShapeMessage(m.message))
-            .map((m: any) => {
-              const rawSender = m.user?.name || m.user?.email || "Member";
-              const cleanSender = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
-              const isMe = (activeMyName && cleanSender.toLowerCase() === activeMyName.toLowerCase()) || (m.user?.email === userEmail);
+          const loaded: ChatMessage[] = [];
+          for (const m of response.data.messages) {
+            const rawSender = m.user?.name || (m.user?.email ? m.user.email.split("@")[0]! : "Member");
+            const cleanFallback = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
+            const parsed = parseDbMessage(m.message, cleanFallback);
+            if (parsed.isShape) continue; // Skip all canvas shapes
 
-              return {
-                id: String(m.id || Math.random()),
-                senderName: cleanSender,
-                message: m.message || "",
-                timestamp: m.createdAt
-                  ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                  : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                isSelf: isMe
-              };
+            const finalSender = parsed.senderName || cleanFallback;
+            const isMe = activeMyName ? (finalSender.trim().toLowerCase() === activeMyName.trim().toLowerCase()) : false;
+
+            loaded.push({
+              id: String(m.id || Math.random()),
+              senderName: finalSender,
+              message: parsed.text,
+              timestamp: m.createdAt
+                ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              isSelf: isMe
             });
+          }
           setMessages(loaded);
         }
       } catch (err) {
@@ -131,12 +147,7 @@ function isShapeMessage(msgStr: string): boolean {
     }
   }, [messages, isOpen, activeMyName]);
 
-  // Clear unread count when opening panel
-  useEffect(() => {
-    if (isOpen) {
-      setUnreadCount(0);
-    }
-  }, [isOpen]);
+
 
   // Listen to WebSocket user_text_message events
   useEffect(() => {
@@ -146,17 +157,17 @@ function isShapeMessage(msgStr: string): boolean {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "user_text_message") {
-          // Guard: ignore if payload is a serialized shape
-          if (isShapeMessage(data.message)) return;
+          const parsed = parseDbMessage(data.message, data.senderName || "Member");
+          if (parsed.isShape) return;
 
-          const rawSender = data.senderName || "Member";
-          const cleanSender = rawSender.includes("@") ? rawSender.split("@")[0]! : rawSender;
-          const isMe = activeMyName ? (cleanSender.toLowerCase() === activeMyName.toLowerCase() || rawSender === userEmail) : false;
+          const finalSender = data.senderName || parsed.senderName || "Member";
+          const finalText = parsed.text || data.message;
+          const isMe = activeMyName ? (finalSender.trim().toLowerCase() === activeMyName.trim().toLowerCase()) : false;
 
           const newMsg: ChatMessage = {
             id: String(Math.random()),
-            senderName: cleanSender,
-            message: data.message,
+            senderName: finalSender,
+            message: finalText,
             timestamp: new Date(data.timestamp || Date.now()).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit"
@@ -165,10 +176,6 @@ function isShapeMessage(msgStr: string): boolean {
           };
 
           setMessages((prev) => [...prev, newMsg]);
-
-          if (!isOpen && !isMe) {
-            setUnreadCount((count) => count + 1);
-          }
         }
       } catch (e) {
         // Non-JSON or different event type
@@ -324,9 +331,15 @@ function isShapeMessage(msgStr: string): boolean {
                     msg.isSelf ? "ml-auto items-end" : "mr-auto items-start"
                   }`}
                 >
-                  <span className="text-[9px] font-bold text-white/50 mb-1 px-1 flex items-center gap-1">
-                    {!msg.isSelf && <UserCheck size={10} className="text-indigo-400" />}
-                    {msg.isSelf ? `You (${msg.senderName})` : msg.senderName}
+                  <span className="text-[10px] font-bold mb-1 px-1 flex items-center gap-1.5">
+                    {msg.isSelf ? (
+                      <span className="text-indigo-300 font-semibold">You ({msg.senderName})</span>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="text-white font-bold">{msg.senderName}</span>
+                      </>
+                    )}
                   </span>
                   <div
                     className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed font-sans shadow-md ${
@@ -368,15 +381,6 @@ function isShapeMessage(msgStr: string): boolean {
               <Send size={15} />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Floating Unread Badge Indicator when panel is collapsed */}
-      {!isOpen && unreadCount > 0 && (
-        <div className="fixed top-20 right-6 z-50 pointer-events-none animate-bounce">
-          <span className="bg-red-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg border border-white/20">
-            {unreadCount} new message{unreadCount > 1 ? "s" : ""}
-          </span>
         </div>
       )}
     </>
