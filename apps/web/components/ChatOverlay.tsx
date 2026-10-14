@@ -103,12 +103,20 @@ function parseDbMessage(raw: string, fallbackSender: string): { isShape: boolean
   };
 }
 
+function getResolvedHttpBackend(): string {
+  let url = HTTP_BACKEND || "http://localhost:3002";
+  if (typeof window !== "undefined" && url.includes("localhost") && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    url = url.replace("localhost", window.location.hostname);
+  }
+  return url;
+}
+
   // Fetch initial chat history from backend on mount
   useEffect(() => {
     let active = true;
     async function fetchHistory() {
       try {
-        const response = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
+        const response = await axios.get(`${getResolvedHttpBackend()}/chats/${roomId}`);
         if (active && Array.isArray(response.data?.messages)) {
           const loaded: ChatMessage[] = [];
           for (const m of response.data.messages) {

@@ -69,6 +69,31 @@ wss.on("connection", function connection(ws, request) {
 
   })
   
+async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number): Promise<number | null> {
+  const numericId = parseInt(roomIdStr);
+  if (!isNaN(numericId)) {
+    return numericId;
+  }
+  try {
+    const existing = await prismaClient.room.findFirst({ where: { slug: roomIdStr } });
+    if (existing) return existing.id;
+    if (fallbackUserId && !isNaN(fallbackUserId)) {
+      try {
+        const created = await prismaClient.room.create({
+          data: { slug: roomIdStr, adminId: fallbackUserId }
+        });
+        return created.id;
+      } catch (e) {
+        const race = await prismaClient.room.findFirst({ where: { slug: roomIdStr } });
+        if (race) return race.id;
+      }
+    }
+  } catch (err) {
+    console.error(`[WS] Error resolving room slug "${roomIdStr}":`, err);
+  }
+  return null;
+}
+
   ws.on("message", async function message(data) {
     let parsedData: any;
     try {
@@ -85,24 +110,55 @@ wss.on("connection", function connection(ws, request) {
 
     if (parsedData.type == "join") {
       const user = users.find(x => x.ws == ws);
-      user?.rooms.push(parsedData.roomId);
-      console.log(`[WS] User ${userId} joined room ${parsedData.roomId}`);
+      const rawRoomId = String(parsedData.roomId || "").trim();
+      if (user && rawRoomId) {
+        if (!user.rooms.includes(rawRoomId)) {
+          user.rooms.push(rawRoomId);
+        }
+        console.log(`[WS] User ${userId} joined room ${rawRoomId}`);
+
+        // Link both numeric ID and slug so room broadcasts match regardless of client representation
+        const numId = parseInt(rawRoomId);
+        if (isNaN(numId)) {
+          prismaClient.room.findFirst({ where: { slug: rawRoomId } })
+            .then(r => {
+              if (r) {
+                const dbIdStr = String(r.id);
+                if (!user.rooms.includes(dbIdStr)) {
+                  user.rooms.push(dbIdStr);
+                  console.log(`[WS] User ${userId} linked to DB roomId ${dbIdStr} for slug ${rawRoomId}`);
+                }
+              }
+            })
+            .catch(() => {});
+        } else {
+          prismaClient.room.findUnique({ where: { id: numId } })
+            .then(r => {
+              if (r && r.slug && !user.rooms.includes(r.slug)) {
+                user.rooms.push(r.slug);
+                console.log(`[WS] User ${userId} linked to slug ${r.slug} for DB roomId ${rawRoomId}`);
+              }
+            })
+            .catch(() => {});
+        }
+      }
     }
 
     if (parsedData.type == "leave_room") {
       const user = users.find(x => x.ws == ws);
       if (!user) return;
-      user.rooms = user.rooms.filter(x => x !== parsedData.roomId);
-      console.log(`[WS] User ${userId} left room ${parsedData.roomId}`);
+      const rawRoomId = String(parsedData.roomId || "").trim();
+      user.rooms = user.rooms.filter(x => x !== rawRoomId);
+      console.log(`[WS] User ${userId} left room ${rawRoomId}`);
     }
 
     if (parsedData.type === "chat") {
-      const roomId = parsedData.roomId;
+      const roomId = String(parsedData.roomId || "").trim();
       const message = parsedData.message;
 
       // 1. Broadcast FIRST to all OTHER users — skip sender to avoid drawing shape twice
       users.forEach(user => {
-        if (user.rooms.includes(roomId) && user.ws !== ws) {
+        if (user.rooms.some(r => String(r).trim() === roomId) && user.ws !== ws) {
           user.ws.send(JSON.stringify({
             type: "chat",
             message,
@@ -112,37 +168,34 @@ wss.on("connection", function connection(ws, request) {
       });
 
       // 2. Persist to DB in the background — DB slowness never blocks the live experience
-      const numericRoomId = parseInt(roomId);
       const numericUserId = parseInt(userId);
-
-      // Pre-flight check: parseInt returns NaN for non-numeric strings
-      if (isNaN(numericRoomId) || isNaN(numericUserId)) {
-        console.error(`[WS] DB write SKIPPED — invalid roomId ("${roomId}") or userId ("${userId}"). Make sure the frontend passes a numeric room ID.`);
-      } else {
-        prismaClient.chat.create({
-          data: {
-            message,
-            roomId: numericRoomId,
-            userId: numericUserId
-          }
-        })
-          .then((record) => {
-            console.log(`[WS] ✅ Shape saved to DB — chat.id=${record.id}, roomId=${numericRoomId}, userId=${numericUserId}`);
+      resolveNumericRoomId(roomId, numericUserId).then(finalRoomId => {
+        if (finalRoomId && !isNaN(numericUserId)) {
+          prismaClient.chat.create({
+            data: {
+              message: typeof message === "string" ? message : JSON.stringify(message),
+              roomId: finalRoomId,
+              userId: numericUserId
+            }
           })
-          .catch((e) => {
-            console.error(`[WS] ❌ DB write FAILED for roomId=${numericRoomId}:`, e?.message ?? e);
-          });
-      }
+            .then((record) => {
+              console.log(`[WS] ✅ Shape saved to DB — chat.id=${record.id}, roomId=${finalRoomId}, userId=${numericUserId}`);
+            })
+            .catch((e) => {
+              console.error(`[WS] ❌ DB write FAILED for roomId=${finalRoomId}:`, e?.message ?? e);
+            });
+        }
+      });
     }
 
     if (parsedData.type === "user_text_message") {
-      const roomId = parsedData.roomId;
+      const roomId = String(parsedData.roomId || "").trim();
       const message = parsedData.message;
       const senderName = parsedData.senderName || "User";
 
       // 1. Broadcast text message to ALL users connected to this room
       users.forEach(user => {
-        if (user.rooms.includes(roomId)) {
+        if (user.rooms.some(r => String(r).trim() === roomId)) {
           user.ws.send(JSON.stringify({
             type: "user_text_message",
             message,
@@ -155,32 +208,33 @@ wss.on("connection", function connection(ws, request) {
       });
 
       // 2. Persist text message to database (including senderName for history)
-      const numericRoomId = parseInt(roomId);
       const numericUserId = parseInt(userId);
-      if (!isNaN(numericRoomId) && !isNaN(numericUserId)) {
-        prismaClient.chat.create({
-          data: {
-            message: JSON.stringify({
-              type: "chat_text",
-              text: message,
-              senderName: senderName
-            }),
-            roomId: numericRoomId,
-            userId: numericUserId
-          }
-        }).catch(e => {
-          console.error(`[WS] Failed to save text message to DB:`, e?.message ?? e);
-        });
-      }
+      resolveNumericRoomId(roomId, numericUserId).then(finalRoomId => {
+        if (finalRoomId && !isNaN(numericUserId)) {
+          prismaClient.chat.create({
+            data: {
+              message: JSON.stringify({
+                type: "chat_text",
+                text: message,
+                senderName: senderName
+              }),
+              roomId: finalRoomId,
+              userId: numericUserId
+            }
+          }).catch(e => {
+            console.error(`[WS] Failed to save text message to DB:`, e?.message ?? e);
+          });
+        }
+      });
     }
 
     if (parsedData.type === "delete_shape") {
-      const roomId = parsedData.roomId;
+      const roomId = String(parsedData.roomId || "").trim();
       const shapeId = parsedData.shapeId;
 
       // 1. Broadcast deletion to all OTHER users in the room
       users.forEach(user => {
-        if (user.rooms.includes(roomId) && user.ws !== ws) {
+        if (user.rooms.some(r => String(r).trim() === roomId) && user.ws !== ws) {
           user.ws.send(JSON.stringify({
             type: "delete_shape",
             shapeId,
@@ -190,31 +244,32 @@ wss.on("connection", function connection(ws, request) {
       });
 
       // 2. Delete the record from DB in the background
-      const numericRoomId = parseInt(roomId);
-      if (!isNaN(numericRoomId) && shapeId) {
-        prismaClient.chat.deleteMany({
-          where: {
-            roomId: numericRoomId,
-            message: {
-              contains: `"id":"${shapeId}"`
+      resolveNumericRoomId(roomId).then(finalRoomId => {
+        if (finalRoomId && shapeId) {
+          prismaClient.chat.deleteMany({
+            where: {
+              roomId: finalRoomId,
+              message: {
+                contains: `"id":"${shapeId}"`
+              }
             }
-          }
-        })
-          .then((res) => {
-            console.log(`[WS] ✅ Shape deleted from DB — count=${res.count}, shapeId=${shapeId}`);
           })
-          .catch((e) => {
-            console.error(`[WS] ❌ DB delete FAILED for shapeId=${shapeId}:`, e?.message ?? e);
-          });
-      }
+            .then((res) => {
+              console.log(`[WS] ✅ Shape deleted from DB — count=${res.count}, shapeId=${shapeId}`);
+            })
+            .catch((e) => {
+              console.error(`[WS] ❌ DB delete FAILED for shapeId=${shapeId}:`, e?.message ?? e);
+            });
+        }
+      });
     }
 
     if (parsedData.type === "clear_canvas") {
-      const roomId = parsedData.roomId;
+      const roomId = String(parsedData.roomId || "").trim();
 
       // 1. Broadcast clear canvas to all OTHER users in the room
       users.forEach(user => {
-        if (user.rooms.includes(roomId) && user.ws !== ws) {
+        if (user.rooms.some(r => String(r).trim() === roomId) && user.ws !== ws) {
           user.ws.send(JSON.stringify({
             type: "clear_canvas",
             roomId
@@ -223,20 +278,21 @@ wss.on("connection", function connection(ws, request) {
       });
 
       // 2. Delete all records for this room from DB in the background
-      const numericRoomId = parseInt(roomId);
-      if (!isNaN(numericRoomId)) {
-        prismaClient.chat.deleteMany({
-          where: {
-            roomId: numericRoomId
-          }
-        })
-          .then((res) => {
-            console.log(`[WS] ✅ Room shapes cleared in DB — count=${res.count}, roomId=${numericRoomId}`);
+      resolveNumericRoomId(roomId).then(finalRoomId => {
+        if (finalRoomId) {
+          prismaClient.chat.deleteMany({
+            where: {
+              roomId: finalRoomId
+            }
           })
-          .catch((e) => {
-            console.error(`[WS] ❌ DB clear FAILED for roomId=${numericRoomId}:`, e?.message ?? e);
-          });
-      }
+            .then((res) => {
+              console.log(`[WS] ✅ Room shapes cleared in DB — count=${res.count}, roomId=${finalRoomId}`);
+            })
+            .catch((e) => {
+              console.error(`[WS] ❌ DB clear FAILED for roomId=${finalRoomId}:`, e?.message ?? e);
+            });
+        }
+      });
     }
   });
 

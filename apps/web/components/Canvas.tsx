@@ -738,7 +738,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                 </button>
             </div>
 
-            <canvas ref={canvasRef} className="block w-full h-full" />
+            <canvas ref={canvasRef} className="block w-full h-full touch-none" style={{ touchAction: "none" }} />
 
             {/* Right-Side Real-Time Live Chat Overlay Panel */}
             <ChatOverlay

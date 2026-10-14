@@ -5,8 +5,10 @@ import { Canvas } from "./Canvas";
 import axios from "axios";
 
 function getWsUrl(configuredUrl: string): string {
-    if (!configuredUrl) return "ws://localhost:8080";
-    let cleanUrl = configuredUrl.trim();
+    let cleanUrl = (configuredUrl || "ws://localhost:8080").trim();
+    if (typeof window !== "undefined" && cleanUrl.includes("localhost") && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        cleanUrl = cleanUrl.replace("localhost", window.location.hostname);
+    }
     if (cleanUrl.startsWith("http://")) {
         cleanUrl = cleanUrl.replace("http://", "ws://");
     } else if (cleanUrl.startsWith("https://")) {
@@ -20,6 +22,14 @@ function getWsUrl(configuredUrl: string): string {
         }
     }
     return cleanUrl;
+}
+
+function getResolvedHttpBackend(): string {
+    let url = HTTP_BACKEND || "http://localhost:3002";
+    if (typeof window !== "undefined" && url.includes("localhost") && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        url = url.replace("localhost", window.location.hostname);
+    }
+    return url;
 }
 
 // Global authentication promise lock to prevent concurrent/StrictMode race conditions in development
@@ -39,16 +49,18 @@ async function getOrPerformDevLogin(): Promise<string> {
                 name: "Dev User"
             };
 
+            const backendUrl = getResolvedHttpBackend();
+
             // 1. Attempt dynamic dev registration
             try {
-                await axios.post(`${HTTP_BACKEND}/signup`, devUser);
+                await axios.post(`${backendUrl}/signup`, devUser);
                 console.log("[RoomCanvas] Auto-registered local dev account");
             } catch (e) {
                 // User already exists — fine
             }
 
             // 2. Perform dev signin
-            const signinRes = await axios.post(`${HTTP_BACKEND}/signin`, {
+            const signinRes = await axios.post(`${backendUrl}/signin`, {
                 username: devUser.username,
                 password: devUser.password
             });

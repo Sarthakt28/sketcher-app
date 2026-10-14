@@ -478,13 +478,20 @@ export function initDraw(
                 console.error("[Draw] Error loading initial shapes:", err);
             });
 
-            socket.onmessage = (event) => {
+            const handleSocketMessage = (event: MessageEvent) => {
                 try {
                     const message = JSON.parse(event.data);
                     if (message.type === "user_text_message") return;
 
                     if (message.type === "chat") {
-                        const parsedShape = JSON.parse(message.message);
+                        let parsedShape = message.message;
+                        if (typeof parsedShape === "string") {
+                            try {
+                                parsedShape = JSON.parse(parsedShape);
+                            } catch (e) {
+                                parsedShape = null;
+                            }
+                        }
                         if (parsedShape && (
                             parsedShape.type === "rect" || 
                             parsedShape.type === "circle" ||
@@ -522,7 +529,9 @@ export function initDraw(
                 } catch (e) {
                     console.error("[Draw] Failed to parse incoming shape from socket:", e);
                 }
-            }
+            };
+
+            socket.addEventListener("message", handleSocketMessage);
             clearCanvas();
             
             let activeTextInput: HTMLInputElement | null = null;
@@ -1106,10 +1115,55 @@ export function initDraw(
                 }
             };
 
+            const handleTouchStart = (e: TouchEvent) => {
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    if (touch) {
+                        if (e.cancelable) e.preventDefault();
+                        handleMouseDown({
+                            clientX: touch.clientX,
+                            clientY: touch.clientY,
+                            button: 0,
+                            preventDefault: () => {}
+                        } as any);
+                    }
+                }
+            };
+
+            const handleTouchMove = (e: TouchEvent) => {
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    if (touch) {
+                        if (e.cancelable) e.preventDefault();
+                        handleMouseMove({
+                            clientX: touch.clientX,
+                            clientY: touch.clientY,
+                            preventDefault: () => {}
+                        } as any);
+                    }
+                }
+            };
+
+            const handleTouchEnd = (e: TouchEvent) => {
+                const touch = e.changedTouches[0];
+                if (touch) {
+                    if (e.cancelable) e.preventDefault();
+                    handleMouseUp({
+                        clientX: touch.clientX,
+                        clientY: touch.clientY,
+                        preventDefault: () => {}
+                    } as any);
+                }
+            };
+
             canvas.addEventListener("mousedown", handleMouseDown);
             canvas.addEventListener("mouseup", handleMouseUp);
             canvas.addEventListener("mousemove", handleMouseMove);
             canvas.addEventListener("mouseleave", handleMouseLeave);
+            canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+            canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+            canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
+            canvas.addEventListener("touchcancel", handleTouchEnd, { passive: false });
             canvas.addEventListener("wheel", handleWheel, { passive: false });
             window.addEventListener("keydown", handleKeyDown);
             window.addEventListener("keyup", handleKeyUp);
@@ -1181,10 +1235,14 @@ export function initDraw(
                     canvas.removeEventListener("mouseup", handleMouseUp);
                     canvas.removeEventListener("mousemove", handleMouseMove);
                     canvas.removeEventListener("mouseleave", handleMouseLeave);
+                    canvas.removeEventListener("touchstart", handleTouchStart);
+                    canvas.removeEventListener("touchmove", handleTouchMove);
+                    canvas.removeEventListener("touchend", handleTouchEnd);
+                    canvas.removeEventListener("touchcancel", handleTouchEnd);
                     canvas.removeEventListener("wheel", handleWheel);
                     window.removeEventListener("keydown", handleKeyDown);
                     window.removeEventListener("keyup", handleKeyUp);
-                    socket.onmessage = null;
+                    socket.removeEventListener("message", handleSocketMessage);
                     if (activeTextInput && activeTextInput.parentElement) {
                         activeTextInput.parentElement.removeChild(activeTextInput);
                     }
@@ -1337,9 +1395,17 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape) {
 
 // Removed legacy clearCanvas helper since it has been moved inside initDraw.
 
+function getResolvedHttpBackend(): string {
+    let url = HTTP_BACKEND || "http://localhost:3002";
+    if (typeof window !== "undefined" && url.includes("localhost") && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        url = url.replace("localhost", window.location.hostname);
+    }
+    return url;
+}
+
 async function getExistingShapes(roomId: string): Promise<Shape[]> {
     try {
-        const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
+        const res = await axios.get(`${getResolvedHttpBackend()}/chats/${roomId}`);
         const messages: { message: string }[] = res.data.messages;
 
         if (!Array.isArray(messages)) {
@@ -1350,7 +1416,10 @@ async function getExistingShapes(roomId: string): Promise<Shape[]> {
         const shapes: Shape[] = [];
         for (const x of messages) {
             try {
-                const parsed = JSON.parse(x.message);
+                let parsed: any = x.message;
+                if (typeof parsed === "string") {
+                    parsed = JSON.parse(parsed);
+                }
                 // Validate: only accept known shape types
                 if (parsed && (
                     parsed.type === "rect" || 
