@@ -23,6 +23,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
     const [sizeOpen, setSizeOpen] = useState<boolean>(false);
     const [exportOpen, setExportOpen] = useState<boolean>(false);
     const [chatOpen, setChatOpen] = useState<boolean>(false);
+    const [hasUnread, setHasUnread] = useState<boolean>(false);
     const [userEmail, setUserEmail] = useState<string>("Member");
     const [showModal, setShowModal] = useState<boolean>(false);
     const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
@@ -515,7 +516,10 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
 
                 {/* Chat Panel Toggle Button */}
                 <button
-                    onClick={() => setChatOpen(!chatOpen)}
+                    onClick={() => {
+                        if (!chatOpen) setHasUnread(false);
+                        setChatOpen(!chatOpen);
+                    }}
                     title="Toggle Live Chat"
                     className={`
                         relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ease-out cursor-pointer hover:scale-105 active:scale-95
@@ -526,6 +530,12 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                     `}
                 >
                     <MessageSquare size={18} strokeWidth={2.2} />
+                    {hasUnread && !chatOpen && (
+                        <span className="absolute top-2 right-2 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.9)] ring-2 ring-zinc-950" />
+                        </span>
+                    )}
                 </button>
             </div>
 
@@ -747,7 +757,11 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                 userEmail={userEmail}
                 isLoggedIn={isPremiumUser()}
                 isOpen={chatOpen}
-                onToggle={() => setChatOpen(!chatOpen)}
+                onToggle={() => {
+                    if (!chatOpen) setHasUnread(false);
+                    setChatOpen(!chatOpen);
+                }}
+                onUnreadChange={setHasUnread}
             />
         </div>
     );

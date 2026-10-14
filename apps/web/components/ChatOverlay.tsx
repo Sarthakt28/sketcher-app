@@ -18,7 +18,8 @@ export function ChatOverlay({
   roomId,
   userEmail,
   isOpen,
-  onToggle
+  onToggle,
+  onUnreadChange
 }: {
   socket: WebSocket | null;
   roomId: string;
@@ -26,6 +27,7 @@ export function ChatOverlay({
   isLoggedIn?: boolean;
   isOpen: boolean;
   onToggle: () => void;
+  onUnreadChange?: (hasUnread: boolean) => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -155,7 +157,12 @@ function getResolvedHttpBackend(): string {
     }
   }, [messages, isOpen, activeMyName]);
 
-
+  // Clear unread indicator when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      onUnreadChange?.(false);
+    }
+  }, [isOpen, onUnreadChange]);
 
   // Listen to WebSocket user_text_message events
   useEffect(() => {
@@ -184,6 +191,10 @@ function getResolvedHttpBackend(): string {
           };
 
           setMessages((prev) => [...prev, newMsg]);
+
+          if (!isOpen && !isMe) {
+            onUnreadChange?.(true);
+          }
         }
       } catch (e) {
         // Non-JSON or different event type
@@ -194,7 +205,7 @@ function getResolvedHttpBackend(): string {
     return () => {
       socket.removeEventListener("message", handleSocketMessage);
     };
-  }, [socket, isOpen, userEmail, activeMyName]);
+  }, [socket, isOpen, userEmail, activeMyName, onUnreadChange]);
 
   const sendMessage = () => {
     const trimmed = inputText.trim();
