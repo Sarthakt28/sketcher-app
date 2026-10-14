@@ -44,6 +44,27 @@ function checkUser(token: string): string | null{
   }
 }
 
+// Server-side heartbeat to keep connections active through proxies (Render, Cloudflare, AWS, Nginx)
+const HEARTBEAT_INTERVAL = 25000;
+const heartbeatTimer = setInterval(() => {
+  wss.clients.forEach((client: any) => {
+    if (client.isAlive === false) {
+      console.log("[WS] Terminating stale connection");
+      return client.terminate();
+    }
+    client.isAlive = false;
+    try {
+      client.ping();
+    } catch (e) {
+      // client might already be closing
+    }
+  });
+}, HEARTBEAT_INTERVAL);
+
+wss.on("close", () => {
+  clearInterval(heartbeatTimer);
+});
+
 wss.on("connection", function connection(ws, request) {
   const url = request.url;
   if(!url){
@@ -59,6 +80,11 @@ wss.on("connection", function connection(ws, request) {
     ws.close(4001, "Token verification failed");  
     return null;
   }
+
+  (ws as any).isAlive = true;
+  ws.on("pong", () => {
+    (ws as any).isAlive = true;
+  });
 
   console.log(`[WS] Connection authenticated successfully. User ID: ${userId}`);
 
@@ -95,6 +121,7 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
 }
 
   ws.on("message", async function message(data) {
+    (ws as any).isAlive = true;
     let parsedData: any;
     try {
       parsedData = JSON.parse(data as unknown as string);

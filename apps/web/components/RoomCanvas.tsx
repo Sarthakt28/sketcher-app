@@ -87,6 +87,8 @@ export function RoomCanvas({roomId}:{
 }){
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [hasConnectedOnce, setHasConnectedOnce] = useState<boolean>(false);
+    const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
     useEffect(() => {
         let ws: WebSocket | null = null;
@@ -97,7 +99,7 @@ export function RoomCanvas({roomId}:{
         let reconnectTimeout: any = null;
 
         async function connect() {
-            setError(null);
+            if (!active) return;
             let token = localStorage.getItem("token") || "";
             
             if (!token) {
@@ -127,18 +129,22 @@ export function RoomCanvas({roomId}:{
                         return;
                     }
                     retryCount = 0; // Reset retry counter on successful connection
+                    setIsReconnecting(false);
+                    setHasConnectedOnce(true);
+                    setError(null);
                     setSocket(socketInstance);
                     socketInstance.send(JSON.stringify({
                         type: "join",
                         roomId
                     }));
 
-                    // Start sending ping heartbeats every 30 seconds to keep connection alive
+                    // Send ping heartbeats every 15s to keep reverse proxies (Render, AWS, Cloudflare) from terminating idle connections
+                    if (pingInterval) clearInterval(pingInterval);
                     pingInterval = setInterval(() => {
                         if (socketInstance.readyState === WebSocket.OPEN) {
                             socketInstance.send(JSON.stringify({ type: "ping" }));
                         }
-                    }, 30000);
+                    }, 15000);
                 };
                 
                 socketInstance.onerror = () => {
@@ -153,39 +159,33 @@ export function RoomCanvas({roomId}:{
                     }
                     if (!active) return; // StrictMode cleanup — ignore silently
                     
-                    setSocket(null); // Clear socket state
+                    setIsReconnecting(true);
                     
                     if (event.code === 4001) {
                         console.log("[RoomCanvas] Token rejected by server (4001). Clearing token & re-authenticating...");
                         localStorage.removeItem("token");
-                        if (retryCount < 3) {
-                            retryCount++;
-                            reconnectTimeout = setTimeout(connect, 1000);
-                        } else {
-                            setError("Your session token was rejected by the server. Please click Reset Session & Retry below.");
-                        }
+                        const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000);
+                        retryCount++;
+                        reconnectTimeout = setTimeout(connect, delay);
                     } else if (event.code !== 1000 && event.code !== 1001) {
-                        if (retryCount < 3) {
-                            retryCount++;
-                            console.log(`[RoomCanvas] Disconnected (code ${event.code}). Auto-reconnecting in 1.5s (attempt ${retryCount}/3)...`);
-                            // If first retry failed, clear token to ensure clean auth
-                            if (retryCount >= 2) {
-                                localStorage.removeItem("token");
-                            }
-                            reconnectTimeout = setTimeout(connect, 1500);
-                        } else {
-                            setError(`Connection to drawing server was closed (Code: ${event.code}). Please verify network or server status.`);
+                        const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000);
+                        retryCount++;
+                        console.log(`[RoomCanvas] Disconnected (code ${event.code}). Auto-reconnecting in ${delay}ms (attempt ${retryCount})...`);
+                        if (retryCount >= 4) {
+                            localStorage.removeItem("token");
                         }
+                        reconnectTimeout = setTimeout(connect, delay);
                     }
                 };
             } catch (err: any) {
                 console.error("[RoomCanvas] Connection initialization failed:", err);
                 if (active) {
-                    if (retryCount < 3) {
-                        retryCount++;
-                        reconnectTimeout = setTimeout(connect, 1500);
-                    } else {
-                        setError(`Failed to initialize WebSocket: ${err.message || String(err)}`);
+                    setIsReconnecting(true);
+                    const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000);
+                    retryCount++;
+                    reconnectTimeout = setTimeout(connect, delay);
+                    if (!hasConnectedOnce && retryCount >= 5) {
+                        setError(`Failed to connect to drawing server: ${err.message || String(err)}`);
                     }
                 }
             }
@@ -193,8 +193,23 @@ export function RoomCanvas({roomId}:{
 
         connect();
 
+        const handleVisibilityOrOnline = () => {
+            if (document.visibilityState === "visible") {
+                if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                    console.log("[RoomCanvas] Tab resumed or network restored; reconnecting immediately...");
+                    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+                    connect();
+                }
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityOrOnline);
+        window.addEventListener("online", handleVisibilityOrOnline);
+
         return () => {
             active = false;
+            document.removeEventListener("visibilitychange", handleVisibilityOrOnline);
+            window.removeEventListener("online", handleVisibilityOrOnline);
             if (pingInterval) {
                 clearInterval(pingInterval);
             }
@@ -205,10 +220,10 @@ export function RoomCanvas({roomId}:{
                 ws.close();
             }
         };
-    }, [roomId]);
+    }, [roomId, hasConnectedOnce]);
 
-    // Error State Renderer
-    if (error) {
+    // Error State Renderer (only shown if initial connection failed completely)
+    if (!hasConnectedOnce && error) {
         return (
             <div className="w-screen h-screen flex flex-col justify-center items-center bg-[#0a0a0f] text-white px-6">
                 <div className="max-w-md w-full bg-white/[0.03] border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-md text-center">
@@ -241,7 +256,7 @@ export function RoomCanvas({roomId}:{
         );
     }
 
-    if (!socket) {
+    if (!hasConnectedOnce) {
         return (
             <div style={{
                 display: "flex",
@@ -269,5 +284,15 @@ export function RoomCanvas({roomId}:{
         );
     }
 
-    return <Canvas roomId={roomId} socket={socket} />;
+    return (
+        <>
+            {isReconnecting && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 backdrop-blur-md text-amber-300 text-xs shadow-lg animate-pulse select-none pointer-events-none">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    Reconnecting to server...
+                </div>
+            )}
+            <Canvas roomId={roomId} socket={socket} />
+        </>
+    );
 }

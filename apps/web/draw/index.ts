@@ -299,7 +299,7 @@ function resizeShape(shape: Shape, handle: ResizeHandle, mx: number, my: number,
 export function initDraw(
     canvas:HTMLCanvasElement, 
     roomId: string, 
-    socket: WebSocket, 
+    socket: WebSocket | null, 
     getActiveTool: () => ToolMode, 
     getActiveColor: () => string | null, 
     getActiveSize: () => number | null, 
@@ -318,9 +318,36 @@ export function initDraw(
                     zoomIn: () => {},
                     zoomOut: () => {},
                     updateSelectedShapeColor: () => {},
-                    updateSelectedShapeSize: () => {}
+                    updateSelectedShapeSize: () => {},
+                    updateSocket: () => {}
                 };
             }
+
+            let currentSocket: WebSocket | null = socket;
+            let pendingOutbox: string[] = [];
+
+            const flushOutbox = () => {
+                if (!currentSocket || currentSocket.readyState !== WebSocket.OPEN) return;
+                while (pendingOutbox.length > 0) {
+                    const msg = pendingOutbox.shift();
+                    if (msg) {
+                        try {
+                            currentSocket.send(msg);
+                        } catch (e) {
+                            console.warn("[Draw] Failed sending queued message:", e);
+                        }
+                    }
+                }
+            };
+
+            const sendSocketMessage = (payload: object) => {
+                const raw = JSON.stringify(payload);
+                if (currentSocket && currentSocket.readyState === WebSocket.OPEN) {
+                    currentSocket.send(raw);
+                } else {
+                    pendingOutbox.push(raw);
+                }
+            };
 
             let existingShapes: Shape[] = [];
             let myDrawnShapeIds: string[] = [];
@@ -531,7 +558,14 @@ export function initDraw(
                 }
             };
 
-            socket.addEventListener("message", handleSocketMessage);
+            if (currentSocket) {
+                currentSocket.addEventListener("message", handleSocketMessage);
+                if (currentSocket.readyState === WebSocket.OPEN) {
+                    flushOutbox();
+                } else {
+                    currentSocket.addEventListener("open", flushOutbox, { once: true });
+                }
+            }
             clearCanvas();
             
             let activeTextInput: HTMLInputElement | null = null;
@@ -626,13 +660,11 @@ export function initDraw(
                             myDrawnShapeIds.push(shapeId);
                             redoStack = [];
                             clearCanvas();
-                            if (socket.readyState === WebSocket.OPEN) {
-                                socket.send(JSON.stringify({
-                                    type: "chat",
-                                    message: JSON.stringify(shape),
-                                    roomId
-                                }));
-                            }
+                            sendSocketMessage({
+                                type: "chat",
+                                message: JSON.stringify(shape),
+                                roomId
+                            });
                         }
                         if (oldInput.parentElement) {
                             oldInput.parentElement.removeChild(oldInput);
@@ -694,13 +726,11 @@ export function initDraw(
                             redoStack = [];
                             clearCanvas();
 
-                            if (socket.readyState === WebSocket.OPEN) {
-                                socket.send(JSON.stringify({
-                                    type: "chat",
-                                    message: JSON.stringify(shape),
-                                    roomId
-                                }));
-                            }
+                            sendSocketMessage({
+                                type: "chat",
+                                message: JSON.stringify(shape),
+                                roomId
+                            });
                         }
                         cleanupInput();
                     };
@@ -765,18 +795,16 @@ export function initDraw(
 
                         const shapeId = selectedShape.id;
                         if (shapeId) {
-                            if (socket.readyState === WebSocket.OPEN) {
-                                socket.send(JSON.stringify({
-                                    type: "delete_shape",
-                                    shapeId: shapeId,
-                                    roomId
-                                }));
-                                socket.send(JSON.stringify({
-                                    type: "chat",
-                                    message: JSON.stringify(selectedShape),
-                                    roomId
-                                }));
-                            }
+                            sendSocketMessage({
+                                type: "delete_shape",
+                                shapeId: shapeId,
+                                roomId
+                            });
+                            sendSocketMessage({
+                                type: "chat",
+                                message: JSON.stringify(selectedShape),
+                                roomId
+                            });
                         }
                         return;
                     }
@@ -789,18 +817,16 @@ export function initDraw(
                         if (Math.abs(dx) > 2 / zoom || Math.abs(dy) > 2 / zoom) {
                             const shapeId = selectedShape.id;
                             if (shapeId) {
-                                if (socket.readyState === WebSocket.OPEN) {
-                                    socket.send(JSON.stringify({
-                                        type: "delete_shape",
-                                        shapeId: shapeId,
-                                        roomId
-                                    }));
-                                    socket.send(JSON.stringify({
-                                        type: "chat",
-                                        message: JSON.stringify(selectedShape),
-                                        roomId
-                                    }));
-                                }
+                                sendSocketMessage({
+                                    type: "delete_shape",
+                                    shapeId: shapeId,
+                                    roomId
+                                });
+                                sendSocketMessage({
+                                    type: "chat",
+                                    message: JSON.stringify(selectedShape),
+                                    roomId
+                                });
                             }
                         }
                         originalShapeCopy = null;
@@ -893,15 +919,11 @@ export function initDraw(
                 myDrawnShapeIds.push(shapeId);
                 redoStack = [];
 
-                if (socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({
-                        type: "chat",
-                        message: JSON.stringify(shape),
-                        roomId
-                    }));
-                } else {
-                    console.warn("[Draw] Cannot send shape, socket is not open. State:", socket.readyState);
-                }
+                sendSocketMessage({
+                    type: "chat",
+                    message: JSON.stringify(shape),
+                    roomId
+                });
             };
 
             const handleMouseMove = (e: MouseEvent) => {
@@ -1183,13 +1205,11 @@ export function initDraw(
                     }
                     clearCanvas();
 
-                    if (socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify({
-                            type: "delete_shape",
-                            shapeId: lastId,
-                            roomId
-                        }));
-                    }
+                    sendSocketMessage({
+                        type: "delete_shape",
+                        shapeId: lastId,
+                        roomId
+                    });
                 }
             };
 
@@ -1205,13 +1225,11 @@ export function initDraw(
                 }
                 clearCanvas();
 
-                if (socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({
-                        type: "chat",
-                        message: JSON.stringify(restoredShape),
-                        roomId
-                    }));
-                }
+                sendSocketMessage({
+                    type: "chat",
+                    message: JSON.stringify(restoredShape),
+                    roomId
+                });
             };
 
             const clear = () => {
@@ -1221,12 +1239,10 @@ export function initDraw(
                 redoStack = [];
                 clearCanvas();
 
-                if (socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({
-                        type: "clear_canvas",
-                        roomId
-                    }));
-                }
+                sendSocketMessage({
+                    type: "clear_canvas",
+                    roomId
+                });
             };
 
             return {
@@ -1242,7 +1258,9 @@ export function initDraw(
                     canvas.removeEventListener("wheel", handleWheel);
                     window.removeEventListener("keydown", handleKeyDown);
                     window.removeEventListener("keyup", handleKeyUp);
-                    socket.removeEventListener("message", handleSocketMessage);
+                    if (currentSocket) {
+                        currentSocket.removeEventListener("message", handleSocketMessage);
+                    }
                     if (activeTextInput && activeTextInput.parentElement) {
                         activeTextInput.parentElement.removeChild(activeTextInput);
                     }
@@ -1290,18 +1308,16 @@ export function initDraw(
                             existingShapes[shapeIndex] = { ...selectedShape };
                         }
                         clearCanvas();
-                        if (socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: "delete_shape",
-                                shapeId: selectedShape.id,
-                                roomId
-                            }));
-                            socket.send(JSON.stringify({
-                                type: "chat",
-                                message: JSON.stringify(selectedShape),
-                                roomId
-                            }));
-                        }
+                        sendSocketMessage({
+                            type: "delete_shape",
+                            shapeId: selectedShape.id,
+                            roomId
+                        });
+                        sendSocketMessage({
+                            type: "chat",
+                            message: JSON.stringify(selectedShape),
+                            roomId
+                        });
                     }
                 },
                 updateSelectedShapeSize: (newSize: number) => {
@@ -1312,19 +1328,49 @@ export function initDraw(
                             existingShapes[shapeIndex] = { ...selectedShape };
                         }
                         clearCanvas();
-                        if (socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: "delete_shape",
-                                shapeId: selectedShape.id,
-                                roomId
-                            }));
-                            socket.send(JSON.stringify({
-                                type: "chat",
-                                message: JSON.stringify(selectedShape),
-                                roomId
-                            }));
+                        sendSocketMessage({
+                            type: "delete_shape",
+                            shapeId: selectedShape.id,
+                            roomId
+                        });
+                        sendSocketMessage({
+                            type: "chat",
+                            message: JSON.stringify(selectedShape),
+                            roomId
+                        });
+                    }
+                },
+                updateSocket: (newSocket: WebSocket) => {
+                    if (currentSocket && currentSocket !== newSocket) {
+                        currentSocket.removeEventListener("message", handleSocketMessage);
+                    }
+                    currentSocket = newSocket;
+                    if (currentSocket) {
+                        currentSocket.addEventListener("message", handleSocketMessage);
+                        if (currentSocket.readyState === WebSocket.OPEN) {
+                            flushOutbox();
+                        } else {
+                            currentSocket.addEventListener("open", flushOutbox, { once: true });
                         }
                     }
+                    getExistingShapes(roomId).then((shapes) => {
+                        let hasChanges = false;
+                        shapes.forEach((remoteShape) => {
+                            const idx = existingShapes.findIndex(s => s.id === remoteShape.id);
+                            if (idx !== -1) {
+                                if (JSON.stringify(existingShapes[idx]) !== JSON.stringify(remoteShape)) {
+                                    existingShapes[idx] = remoteShape;
+                                    hasChanges = true;
+                                }
+                            } else {
+                                existingShapes.push(remoteShape);
+                                hasChanges = true;
+                            }
+                        });
+                        if (hasChanges) {
+                            clearCanvas();
+                        }
+                    }).catch(() => {});
                 }
             };
 }

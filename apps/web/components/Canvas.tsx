@@ -3,7 +3,7 @@ import { initDraw, ToolMode } from "../draw/index";
 import { Square, Circle, ArrowUpRight, Triangle as TriangleIcon, Pencil, Undo2, Redo2, Trash2, Type, Eraser, Download, Sparkles, Lock, MousePointer, Hand, Minus, Plus, RotateCcw, Share2, Check, MessageSquare } from "lucide-react";
 import { ChatOverlay } from "./ChatOverlay";
 
-export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }) {
+export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket | null }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [activeTool, setActiveTool] = useState<ToolMode>("pencil");
     const activeToolRef = useRef<ToolMode>("pencil");
@@ -170,6 +170,20 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
 
 
 
+    const drawInstanceRef = useRef<{
+        cleanup: () => void;
+        undo: () => void;
+        redo: () => void;
+        clear: () => void;
+        getShapes: () => any[];
+        resetView: () => void;
+        zoomIn: () => void;
+        zoomOut: () => void;
+        updateSelectedShapeColor: (color: string) => void;
+        updateSelectedShapeSize: (size: number) => void;
+        updateSocket?: (newSocket: WebSocket) => void;
+    } | null>(null);
+
     const drawActionsRef = useRef<{
         undo: () => void;
         redo: () => void;
@@ -183,8 +197,6 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
     } | null>(null);
 
     useEffect(() => {
-        let drawInstance: { cleanup: () => void; undo: () => void; redo: () => void; clear: () => void; getShapes: () => any[]; resetView: () => void; zoomIn: () => void; zoomOut: () => void; updateSelectedShapeColor: (c: string) => void; updateSelectedShapeSize: (s: number) => void } | undefined;
-
         if (canvasRef.current) {
             canvasRef.current.width = window.innerWidth;
             canvasRef.current.height = window.innerHeight;
@@ -202,7 +214,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
                 }
             );
             if (res) {
-                drawInstance = res;
+                drawInstanceRef.current = res;
                 drawActionsRef.current = {
                     undo: res.undo,
                     redo: res.redo,
@@ -234,12 +246,19 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket }
 
         return () => {
             window.removeEventListener("resize", handleResize);
-            if (drawInstance) {
-                drawInstance.cleanup();
+            if (drawInstanceRef.current) {
+                drawInstanceRef.current.cleanup();
+                drawInstanceRef.current = null;
             }
             drawActionsRef.current = null;
         };
-    }, [roomId, socket]); // canvasRef intentionally omitted — refs are stable
+    }, [roomId]); // canvasRef intentionally omitted — refs are stable. Socket reconnection is handled below without re-initializing canvas!
+
+    useEffect(() => {
+        if (socket && drawInstanceRef.current?.updateSocket) {
+            drawInstanceRef.current.updateSocket(socket);
+        }
+    }, [socket]);
 
     const tools = [
         { id: "select" as ToolMode, icon: MousePointer, label: "Select" },
