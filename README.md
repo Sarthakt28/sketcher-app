@@ -258,6 +258,8 @@ The HTTP and WebSocket backends are optimized for deployment on **Render.com** u
 | `clear_canvas` | Client → Server | Broadcasts canvas clear event to room participants & clears room shapes in DB |
 | `user_text_message` | Server → Client | Relays text chat message with timestamp & sender name to room users |
 | `chat` | Server → Client | Relays newly drawn shape to all other room users |
+| `get_user_count` | Client → Server | `{ type: "get_user_count", roomId: "108" }` — Requests real-time participant count |
+| `room_user_count` | Server → Client | `{ type: "room_user_count", roomId: "108", count: 3 }` — Broadcasts live online participant count |
 
 ---
 

@@ -29,6 +29,54 @@ interface User{
 
 const users: User[] = [];
 
+function getRoomAliases(roomId: string): Set<string> {
+  const cleanId = String(roomId || "").trim();
+  const aliases = new Set<string>();
+  if (cleanId) aliases.add(cleanId);
+
+  users.forEach(u => {
+    if (u.rooms.some(r => String(r).trim() === cleanId)) {
+      u.rooms.forEach(r => {
+        const tr = String(r).trim();
+        if (tr) aliases.add(tr);
+      });
+    }
+  });
+
+  return aliases;
+}
+
+function getRoomUsers(roomId: string): User[] {
+  const aliases = getRoomAliases(roomId);
+  return users.filter(u => u.rooms.some(r => aliases.has(String(r).trim())));
+}
+
+function broadcastRoomUserCount(roomId: string) {
+  const cleanRoomId = String(roomId || "").trim();
+  if (!cleanRoomId) return;
+
+  const roomUsers = getRoomUsers(cleanRoomId);
+  const count = roomUsers.length;
+
+  console.log(`[WS] Broadcasting user count for room '${cleanRoomId}': ${count} online across ${roomUsers.length} connections`);
+
+  const payload = JSON.stringify({
+    type: "room_user_count",
+    roomId: cleanRoomId,
+    count
+  });
+
+  roomUsers.forEach(u => {
+    if (u.ws.readyState === WebSocket.OPEN) {
+      try {
+        u.ws.send(payload);
+      } catch (e) {
+        // ignore socket errors if connection is closing
+      }
+    }
+  });
+}
+
 function checkUser(token: string): string | null{
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -156,8 +204,11 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
                   console.log(`[WS] User ${userId} linked to DB roomId ${dbIdStr} for slug ${rawRoomId}`);
                 }
               }
+              broadcastRoomUserCount(rawRoomId);
             })
-            .catch(() => {});
+            .catch(() => {
+              broadcastRoomUserCount(rawRoomId);
+            });
         } else {
           prismaClient.room.findUnique({ where: { id: numId } })
             .then(r => {
@@ -165,9 +216,20 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
                 user.rooms.push(r.slug);
                 console.log(`[WS] User ${userId} linked to slug ${r.slug} for DB roomId ${rawRoomId}`);
               }
+              broadcastRoomUserCount(rawRoomId);
             })
-            .catch(() => {});
+            .catch(() => {
+              broadcastRoomUserCount(rawRoomId);
+            });
         }
+        broadcastRoomUserCount(rawRoomId);
+      }
+    }
+
+    if (parsedData.type === "get_user_count") {
+      const rawRoomId = String(parsedData.roomId || "").trim();
+      if (rawRoomId) {
+        broadcastRoomUserCount(rawRoomId);
       }
     }
 
@@ -177,6 +239,7 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
       const rawRoomId = String(parsedData.roomId || "").trim();
       user.rooms = user.rooms.filter(x => x !== rawRoomId);
       console.log(`[WS] User ${userId} left room ${rawRoomId}`);
+      broadcastRoomUserCount(rawRoomId);
     }
 
     if (parsedData.type === "chat") {
@@ -327,8 +390,19 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
   ws.on("close", () => {
     const index = users.findIndex(x => x.ws === ws);
     if (index !== -1) {
+      const disconnectedUser = users[index];
+      const roomsToNotify = [...(disconnectedUser?.rooms || [])];
       console.log(`[WS] User ${userId} disconnected. Removing from active users list.`);
       users.splice(index, 1);
+
+      const notified = new Set<string>();
+      roomsToNotify.forEach(r => {
+        const clean = String(r).trim();
+        if (clean && !notified.has(clean)) {
+          notified.add(clean);
+          broadcastRoomUserCount(clean);
+        }
+      });
     }
   });
 });

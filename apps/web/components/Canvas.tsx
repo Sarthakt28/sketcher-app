@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { initDraw, ToolMode } from "../draw/index";
-import { Square, Circle, ArrowUpRight, Triangle as TriangleIcon, Pencil, Undo2, Redo2, Trash2, Type, Eraser, Download, Sparkles, Lock, MousePointer, Hand, Minus, Plus, RotateCcw, Share2, Check, MessageSquare } from "lucide-react";
+import { Square, Circle, ArrowUpRight, Triangle as TriangleIcon, Pencil, Undo2, Redo2, Trash2, Type, Eraser, Download, Sparkles, Lock, MousePointer, Hand, Minus, Plus, RotateCcw, Share2, Check, MessageSquare, Users } from "lucide-react";
 import { ChatOverlay } from "./ChatOverlay";
 
 export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket | null }) {
@@ -28,6 +28,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
     const [showModal, setShowModal] = useState<boolean>(false);
     const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
     const [copied, setCopied] = useState<boolean>(false);
+    const [onlineCount, setOnlineCount] = useState<number>(1);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -260,6 +261,42 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
         }
     }, [socket]);
 
+    // Listen to real-time online user count updates from the WebSocket server
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleSocketMessage = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === "room_user_count" && typeof data.count === "number") {
+                    setOnlineCount(Math.max(1, data.count));
+                }
+            } catch (e) {
+                // ignore non-json messages
+            }
+        };
+
+        socket.addEventListener("message", handleSocketMessage);
+
+        const sendGetCount = () => {
+            if (socket.readyState === WebSocket.OPEN) {
+                try {
+                    socket.send(JSON.stringify({ type: "get_user_count", roomId }));
+                } catch (e) {}
+            }
+        };
+
+        if (socket.readyState === WebSocket.OPEN) {
+            sendGetCount();
+        } else {
+            socket.addEventListener("open", sendGetCount, { once: true });
+        }
+
+        return () => {
+            socket.removeEventListener("message", handleSocketMessage);
+        };
+    }, [socket, roomId]);
+
     const tools = [
         { id: "select" as ToolMode, icon: MousePointer, label: "Select" },
         { id: "pencil" as ToolMode, icon: Pencil, label: "Pencil" },
@@ -285,6 +322,43 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-[#09090b]">
+            {/* Top-Left Room & Presence Header Pill */}
+            <div className="absolute top-4 sm:top-6 left-4 sm:left-6 z-50 flex items-center gap-2 p-1.5 px-3 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]">
+                <a
+                    href="/canvas"
+                    title="Back to Lobby"
+                    className="flex items-center gap-2 text-white/70 hover:text-white transition-all group"
+                >
+                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.35)] group-hover:scale-105 transition-transform">
+                        <Pencil size={13} className="text-white" />
+                    </div>
+                    <span className="font-extrabold text-xs tracking-tight text-white/90 group-hover:text-white hidden sm:inline">Sketcher</span>
+                </a>
+
+                <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+
+                <span className="text-[11px] font-semibold text-white/40 max-w-[90px] sm:max-w-[130px] truncate" title={`Room: ${roomId}`}>
+                    #{roomId}
+                </span>
+
+                <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+
+                {/* Online Users Presence Indicator */}
+                <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 select-none shadow-[0_0_12px_rgba(16,185,129,0.12)] cursor-default"
+                    title={`${onlineCount} ${onlineCount === 1 ? "person" : "people"} online in this room`}
+                >
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <Users size={12} className="text-emerald-400" />
+                    <span className="text-[11px] font-bold tracking-wide">
+                        {onlineCount} <span className="hidden sm:inline font-medium text-emerald-400/80">{onlineCount === 1 ? "online" : "online"}</span>
+                    </span>
+                </div>
+            </div>
+
             {/* Elegant Floating Toolbar */}
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 p-1.5 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]">
                 {tools.map((tool) => {
@@ -529,6 +603,22 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
                 >
                     {copied ? <Check size={18} strokeWidth={2.5} /> : <Share2 size={18} strokeWidth={2.2} />}
                 </button>
+
+                {/* Vertical Divider */}
+                <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+                {/* Live Online Users Pill in Toolbar */}
+                <div
+                    title={`${onlineCount} ${onlineCount === 1 ? "person" : "people"} online in this session`}
+                    className="flex items-center gap-1.5 px-2.5 h-10 rounded-xl bg-white/5 border border-white/10 select-none text-emerald-400 cursor-default"
+                >
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                    </span>
+                    <Users size={15} className="text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-400">{onlineCount}</span>
+                </div>
 
                 {/* Vertical Divider */}
                 <div className="w-[1px] h-6 bg-white/10 mx-1" />
@@ -781,6 +871,7 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
                     setChatOpen(!chatOpen);
                 }}
                 onUnreadChange={setHasUnread}
+                onlineCount={onlineCount}
             />
         </div>
     );

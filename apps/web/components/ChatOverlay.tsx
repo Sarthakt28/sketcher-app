@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Send, UserCheck, MessageCircle, Edit2, Sparkles } from "lucide-react";
+import { MessageSquare, X, Send, UserCheck, MessageCircle, Edit2, Sparkles, Users } from "lucide-react";
 import axios from "axios";
 import { HTTP_BACKEND } from "@/app/config";
 
@@ -19,7 +19,8 @@ export function ChatOverlay({
   userEmail,
   isOpen,
   onToggle,
-  onUnreadChange
+  onUnreadChange,
+  onlineCount = 1
 }: {
   socket: WebSocket | null;
   roomId: string;
@@ -28,6 +29,7 @@ export function ChatOverlay({
   isOpen: boolean;
   onToggle: () => void;
   onUnreadChange?: (hasUnread: boolean) => void;
+  onlineCount?: number;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -240,12 +242,22 @@ function getResolvedHttpBackend(): string {
                 <p className="text-[9px] text-indigo-400/80 font-medium">Collaborating in Room #{roomId}</p>
               </div>
             </div>
-            <button
-              onClick={onToggle}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-            >
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold select-none"
+                title={`${onlineCount} ${onlineCount === 1 ? "user" : "users"} active in this room`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <Users size={11} />
+                <span>{onlineCount} {onlineCount === 1 ? "online" : "online"}</span>
+              </div>
+              <button
+                onClick={onToggle}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Prompt Body */}
@@ -324,12 +336,22 @@ function getResolvedHttpBackend(): string {
                 </div>
               </div>
             </div>
-            <button
-              onClick={onToggle}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-            >
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold select-none"
+                title={`${onlineCount} ${onlineCount === 1 ? "user" : "users"} active in this room`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <Users size={11} />
+                <span>{onlineCount} {onlineCount === 1 ? "online" : "online"}</span>
+              </div>
+              <button
+                onClick={onToggle}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Messages Feed */}
