@@ -26,6 +26,10 @@ coverage
 out/
 build
 dist
+*.tsbuildinfo
+next-env.d.ts
+*.d.ts.map
+*.js.map
 
 
 # Debug
