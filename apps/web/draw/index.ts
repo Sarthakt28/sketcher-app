@@ -101,82 +101,8 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
     return Math.hypot(px - projX, py - projY);
 }
 
-function isShapeHitByEraser(px: number, py: number, shape: Shape, r: number): boolean {
-    const box = getShapeBoundingBox(shape);
-    const shapeStroke = (shape.size || 2);
-    const threshold = r + shapeStroke / 2;
-
-    // Quick bounding box check
-    if (
-        px < box.minX - threshold ||
-        px > box.maxX + threshold ||
-        py < box.minY - threshold ||
-        py > box.maxY + threshold
-    ) {
-        return false;
-    }
-
-    if (shape.type === "rect") {
-        const minX = Math.min(shape.x, shape.x + shape.width);
-        const maxX = Math.max(shape.x, shape.x + shape.width);
-        const minY = Math.min(shape.y, shape.y + shape.height);
-        const maxY = Math.max(shape.y, shape.y + shape.height);
-
-        const d1 = distToSegment(px, py, minX, minY, maxX, minY);
-        const d2 = distToSegment(px, py, minX, maxY, maxX, maxY);
-        const d3 = distToSegment(px, py, minX, minY, minX, maxY);
-        const d4 = distToSegment(px, py, maxX, minY, maxX, maxY);
-        if (Math.min(d1, d2, d3, d4) <= threshold) return true;
-
-        if (px >= minX && px <= maxX && py >= minY && py <= maxY && (maxX - minX <= r * 2 || maxY - minY <= r * 2)) {
-            return true;
-        }
-        return false;
-    } else if (shape.type === "circle") {
-        const dist = Math.hypot(px - shape.x, py - shape.y);
-        if (Math.abs(dist - shape.radius) <= threshold) return true;
-        if (dist <= shape.radius && shape.radius <= r) return true;
-        return false;
-    } else if (shape.type === "arrow") {
-        if (distToSegment(px, py, shape.x, shape.y, shape.endX, shape.endY) <= threshold) return true;
-        const angle = Math.atan2(shape.endY - shape.y, shape.endX - shape.x);
-        const headLength = 15;
-        const h1X = shape.endX - headLength * Math.cos(angle - Math.PI / 6);
-        const h1Y = shape.endY - headLength * Math.sin(angle - Math.PI / 6);
-        const h2X = shape.endX - headLength * Math.cos(angle + Math.PI / 6);
-        const h2Y = shape.endY - headLength * Math.sin(angle + Math.PI / 6);
-        if (distToSegment(px, py, shape.endX, shape.endY, h1X, h1Y) <= threshold) return true;
-        if (distToSegment(px, py, shape.endX, shape.endY, h2X, h2Y) <= threshold) return true;
-        return false;
-    } else if (shape.type === "triangle") {
-        const p1x = shape.x, p1y = shape.y;
-        const p2x = 2 * shape.x - shape.endX, p2y = shape.endY;
-        const p3x = shape.endX, p3y = shape.endY;
-        const d1 = distToSegment(px, py, p1x, p1y, p2x, p2y);
-        const d2 = distToSegment(px, py, p2x, p2y, p3x, p3y);
-        const d3 = distToSegment(px, py, p3x, p3y, p1x, p1y);
-        return Math.min(d1, d2, d3) <= threshold;
-    } else if (shape.type === "pencil" || shape.type === "eraser") {
-        for (let i = 0; i < shape.points.length - 1; i++) {
-            const p1 = shape.points[i];
-            const p2 = shape.points[i + 1];
-            if (p1 && p2 && distToSegment(px, py, p1.x, p1.y, p2.x, p2.y) <= threshold) {
-                return true;
-            }
-        }
-        return false;
-    } else if (shape.type === "text") {
-        return (
-            px >= box.minX - threshold &&
-            px <= box.maxX + threshold &&
-            py >= box.minY - threshold &&
-            py <= box.maxY + threshold
-        );
-    }
-    return false;
-}
-
 function isPointInShape(px: number, py: number, shape: Shape): boolean {
+    if (shape.type === "eraser") return false;
     const box = getShapeBoundingBox(shape);
     const padding = 8; // clickable padding around thin lines
     
@@ -194,7 +120,7 @@ function isPointInShape(px: number, py: number, shape: Shape): boolean {
         return dist <= shape.radius + padding;
     } else if (shape.type === "arrow") {
         return distToSegment(px, py, shape.x, shape.y, shape.endX, shape.endY) <= padding;
-    } else if (shape.type === "pencil" || shape.type === "eraser") {
+    } else if (shape.type === "pencil") {
         for (let i = 0; i < shape.points.length - 1; i++) {
             const p1 = shape.points[i];
             const p2 = shape.points[i + 1];
@@ -428,8 +354,10 @@ export function initDraw(
             let undoHistory: HistoryAction[] = [];
             let redoHistory: HistoryAction[] = [];
             let currentPencilPoints: { x: number; y: number }[] = [];
-            let lastEraserX = 0;
-            let lastEraserY = 0;
+            let currentEraserPoints: { x: number; y: number }[] = [];
+
+            const offscreenCanvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+            const offscreenCtx = offscreenCanvas ? offscreenCanvas.getContext("2d") : null;
 
             let selectedShape: Shape | null = null;
             let isDragging = false;
@@ -451,63 +379,140 @@ export function initDraw(
             let panStartY = 0;
             let isSpacePressed = false;
 
-            const getEraserRadius = () => {
+            const getEraserStrokeWidth = () => {
                 const userSize = getActiveSize();
-                const screenR = userSize === 2 ? 10 : userSize === 6 ? 16 : userSize === 12 ? 24 : userSize === 20 ? 36 : 16;
-                return Math.max(6, screenR / zoom);
+                return userSize === 2 ? 14 : userSize === 6 ? 26 : userSize === 12 ? 44 : userSize === 20 ? 68 : 26;
             };
 
-            const eraseShapesAtPoint = (worldX: number, worldY: number, r: number) => {
-                const deletedShapes: Shape[] = [];
-
-                for (let i = existingShapes.length - 1; i >= 0; i--) {
-                    const shape = existingShapes[i];
-                    if (shape && isShapeHitByEraser(worldX, worldY, shape, r)) {
-                        const [removed] = existingShapes.splice(i, 1);
-                        if (removed) {
-                            deletedShapes.push(removed);
-                            if (removed.id) {
-                                sendSocketMessage({
-                                    type: "delete_shape",
-                                    shapeId: removed.id,
-                                    roomId
-                                });
-                            }
-                        }
-                    }
-                }
-
-                if (deletedShapes.length > 0) {
-                    if (selectedShape && deletedShapes.some(s => s.id === selectedShape?.id)) {
-                        selectedShape = null;
-                    }
-                    deletedShapes.forEach(s => {
-                        undoHistory.push({ type: "delete", shape: s });
-                    });
-                    redoHistory = [];
-                    clearCanvas();
-                }
+            const getEraserRadius = () => {
+                return getEraserStrokeWidth() / 2;
             };
 
-            const eraseAlongSegment = (x1: number, y1: number, x2: number, y2: number, r: number) => {
-                const dist = Math.hypot(x2 - x1, y2 - y1);
-                const stepSize = Math.max(2, r / 2);
-                const steps = Math.max(1, Math.ceil(dist / stepSize));
-                for (let i = 0; i <= steps; i++) {
-                    const t = i / steps;
-                    const x = x1 + t * (x2 - x1);
-                    const y = y1 + t * (y2 - y1);
-                    eraseShapesAtPoint(x, y, r);
-                }
+            const drawEraserCursor = (worldX: number, worldY: number, isErasing: boolean) => {
+                const r = getEraserRadius();
+                ctx.save();
+                ctx.translate(panX, panY);
+                ctx.scale(zoom, zoom);
+
+                ctx.beginPath();
+                ctx.arc(worldX, worldY, r, 0, Math.PI * 2);
+                ctx.fillStyle = isErasing ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.1)";
+                ctx.fill();
+                ctx.strokeStyle = isErasing ? "rgba(239, 68, 68, 0.9)" : "rgba(255, 255, 255, 0.65)";
+                ctx.lineWidth = 1.5 / zoom;
+                ctx.stroke();
+
+                // Precision center dot
+                ctx.fillStyle = isErasing ? "rgba(239, 68, 68, 0.95)" : "rgba(255, 255, 255, 0.9)";
+                ctx.beginPath();
+                ctx.arc(worldX, worldY, 1.5 / zoom, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
             };
 
             const clearCanvas = () => {
-                // 1. Draw background
+                // 1. Synchronize offscreen canvas dimensions
+                if (offscreenCanvas && offscreenCtx) {
+                    if (offscreenCanvas.width !== canvas.width || offscreenCanvas.height !== canvas.height) {
+                        offscreenCanvas.width = canvas.width;
+                        offscreenCanvas.height = canvas.height;
+                    }
+
+                    offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+                    offscreenCtx.save();
+                    offscreenCtx.translate(panX, panY);
+                    offscreenCtx.scale(zoom, zoom);
+                    offscreenCtx.lineCap = "round";
+                    offscreenCtx.lineJoin = "round";
+
+                    // 2. Draw existing shapes and erasures in chronological order
+                    existingShapes.forEach((shape) => {
+                        if (shape.type === "eraser") {
+                            offscreenCtx.save();
+                            offscreenCtx.globalCompositeOperation = "destination-out";
+                            offscreenCtx.strokeStyle = "rgba(0,0,0,1)";
+                            offscreenCtx.fillStyle = "rgba(0,0,0,1)";
+                            offscreenCtx.lineWidth = shape.size || 26;
+                            offscreenCtx.lineCap = "round";
+                            offscreenCtx.lineJoin = "round";
+
+                            if (shape.points && shape.points.length > 0 && shape.points[0]) {
+                                if (shape.points.length === 1) {
+                                    offscreenCtx.beginPath();
+                                    offscreenCtx.arc(shape.points[0].x, shape.points[0].y, (shape.size || 26) / 2, 0, Math.PI * 2);
+                                    offscreenCtx.fill();
+                                } else {
+                                    offscreenCtx.beginPath();
+                                    offscreenCtx.moveTo(shape.points[0].x, shape.points[0].y);
+                                    for (let i = 1; i < shape.points.length; i++) {
+                                        const p = shape.points[i];
+                                        if (p) offscreenCtx.lineTo(p.x, p.y);
+                                    }
+                                    offscreenCtx.stroke();
+                                }
+                            }
+                            offscreenCtx.restore();
+                        } else {
+                            offscreenCtx.save();
+                            offscreenCtx.globalCompositeOperation = "source-over";
+                            drawShape(offscreenCtx, shape);
+                            offscreenCtx.restore();
+                        }
+                    });
+
+                    // Draw active pencil path if drawing
+                    if (currentPencilPoints.length > 0 && currentPencilPoints[0]) {
+                        offscreenCtx.save();
+                        offscreenCtx.globalCompositeOperation = "source-over";
+                        offscreenCtx.strokeStyle = getActiveColor() || "#ffffff";
+                        offscreenCtx.lineWidth = getActiveSize() || 2;
+                        offscreenCtx.beginPath();
+                        offscreenCtx.moveTo(currentPencilPoints[0].x, currentPencilPoints[0].y);
+                        for (let i = 1; i < currentPencilPoints.length; i++) {
+                            const p = currentPencilPoints[i];
+                            if (p) offscreenCtx.lineTo(p.x, p.y);
+                        }
+                        offscreenCtx.stroke();
+                        offscreenCtx.restore();
+                    }
+
+                    // Draw active eraser path with destination-out if actively erasing
+                    if (currentEraserPoints.length > 0 && currentEraserPoints[0]) {
+                        offscreenCtx.save();
+                        offscreenCtx.globalCompositeOperation = "destination-out";
+                        offscreenCtx.strokeStyle = "rgba(0,0,0,1)";
+                        offscreenCtx.fillStyle = "rgba(0,0,0,1)";
+                        offscreenCtx.lineWidth = getEraserStrokeWidth();
+                        offscreenCtx.lineCap = "round";
+                        offscreenCtx.lineJoin = "round";
+
+                        if (currentEraserPoints.length === 1) {
+                            offscreenCtx.beginPath();
+                            offscreenCtx.arc(currentEraserPoints[0].x, currentEraserPoints[0].y, getEraserStrokeWidth() / 2, 0, Math.PI * 2);
+                            offscreenCtx.fill();
+                        } else {
+                            offscreenCtx.beginPath();
+                            offscreenCtx.moveTo(currentEraserPoints[0].x, currentEraserPoints[0].y);
+                            for (let i = 1; i < currentEraserPoints.length; i++) {
+                                const p = currentEraserPoints[i];
+                                if (p) offscreenCtx.lineTo(p.x, p.y);
+                            }
+                            offscreenCtx.stroke();
+                        }
+                        offscreenCtx.restore();
+                    }
+
+                    offscreenCtx.restore();
+                }
+
+                // 3. Draw background
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "#09090b";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // 2. Draw dynamic grid of dots
+                // 4. Draw dynamic grid of dots
                 ctx.save();
                 const gridSpacing = 40;
                 const minX = -panX / zoom;
@@ -531,33 +536,10 @@ export function initDraw(
                 }
                 ctx.restore();
 
-                // 3. Draw all shapes
-                ctx.save();
-                ctx.translate(panX, panY);
-                ctx.scale(zoom, zoom);
-                ctx.lineCap = "round";
-                ctx.lineJoin = "round";
-
-                existingShapes.forEach((shape) => {
-                    if (shape.type !== "eraser") {
-                        drawShape(ctx, shape);
-                    }
-                });
-
-                // Draw active pencil path if drawing
-                if (currentPencilPoints.length > 0 && currentPencilPoints[0]) {
-                    ctx.strokeStyle = getActiveColor() || "#ffffff";
-                    ctx.lineWidth = getActiveSize() || 2;
-                    ctx.beginPath();
-                    ctx.moveTo(currentPencilPoints[0].x, currentPencilPoints[0].y);
-                    for (let i = 1; i < currentPencilPoints.length; i++) {
-                        const p = currentPencilPoints[i];
-                        if (p) ctx.lineTo(p.x, p.y);
-                    }
-                    ctx.stroke();
+                // 5. Draw the offscreen canvas (with shapes and transparent cutout erasures) on top of the dot grid
+                if (offscreenCanvas) {
+                    ctx.drawImage(offscreenCanvas, 0, 0);
                 }
-
-                ctx.restore();
 
                 // 6. Draw selection bounding box if a shape is selected
                 if (selectedShape) {
@@ -866,10 +848,9 @@ export function initDraw(
                 } else if (getActiveTool() === "eraser") {
                     clicked = true;
                     selectedShape = null;
-                    lastEraserX = startX;
-                    lastEraserY = startY;
-                    const r = getEraserRadius();
-                    eraseShapesAtPoint(startX, startY, r);
+                    currentEraserPoints = [{ x: startX, y: startY }];
+                    clearCanvas();
+                    drawEraserCursor(startX, startY, true);
                     return;
                 }
             };
@@ -947,7 +928,28 @@ export function initDraw(
 
                 if (tool === "eraser") {
                     clicked = false;
+                    if (currentEraserPoints.length > 0) {
+                        const eraserWidth = getEraserStrokeWidth();
+                        const shapeId = Math.random().toString(36).substring(2, 9);
+                        const eraserShape: Shape = {
+                            id: shapeId,
+                            type: "eraser",
+                            points: currentEraserPoints,
+                            size: eraserWidth
+                        };
+                        existingShapes.push(eraserShape);
+                        undoHistory.push({ type: "add", shape: eraserShape });
+                        redoHistory = [];
+
+                        sendSocketMessage({
+                            type: "chat",
+                            message: JSON.stringify(eraserShape),
+                            roomId
+                        });
+                        currentEraserPoints = [];
+                    }
                     clearCanvas();
+                    drawEraserCursor(currentWorldX, currentWorldY, false);
                     return;
                 }
 
@@ -1110,37 +1112,12 @@ export function initDraw(
                 if (tool === "text") return;
 
                 if (tool === "eraser") {
-                    const r = getEraserRadius();
                     canvas.style.cursor = "none";
-
                     if (clicked) {
-                        eraseAlongSegment(lastEraserX, lastEraserY, currentWorldX, currentWorldY, r);
-                        lastEraserX = currentWorldX;
-                        lastEraserY = currentWorldY;
+                        currentEraserPoints.push({ x: currentWorldX, y: currentWorldY });
                     }
-
                     clearCanvas();
-
-                    // Render circular eraser preview cursor
-                    ctx.save();
-                    ctx.translate(panX, panY);
-                    ctx.scale(zoom, zoom);
-
-                    ctx.beginPath();
-                    ctx.arc(currentWorldX, currentWorldY, r, 0, Math.PI * 2);
-                    ctx.fillStyle = clicked ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.1)";
-                    ctx.fill();
-                    ctx.strokeStyle = clicked ? "rgba(239, 68, 68, 0.9)" : "rgba(255, 255, 255, 0.65)";
-                    ctx.lineWidth = 1.5 / zoom;
-                    ctx.stroke();
-
-                    // Precision center dot
-                    ctx.fillStyle = clicked ? "rgba(239, 68, 68, 0.95)" : "rgba(255, 255, 255, 0.9)";
-                    ctx.beginPath();
-                    ctx.arc(currentWorldX, currentWorldY, 1.5 / zoom, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.restore();
+                    drawEraserCursor(currentWorldX, currentWorldY, clicked);
                     return;
                 }
 
@@ -1197,6 +1174,26 @@ export function initDraw(
 
             const handleMouseLeave = () => {
                 if (getActiveTool() === "eraser") {
+                    if (clicked && currentEraserPoints.length > 0) {
+                        const eraserWidth = getEraserStrokeWidth();
+                        const shapeId = Math.random().toString(36).substring(2, 9);
+                        const eraserShape: Shape = {
+                            id: shapeId,
+                            type: "eraser",
+                            points: currentEraserPoints,
+                            size: eraserWidth
+                        };
+                        existingShapes.push(eraserShape);
+                        undoHistory.push({ type: "add", shape: eraserShape });
+                        redoHistory = [];
+
+                        sendSocketMessage({
+                            type: "chat",
+                            message: JSON.stringify(eraserShape),
+                            roomId
+                        });
+                        currentEraserPoints = [];
+                    }
                     clicked = false;
                     canvas.style.cursor = "default";
                     clearCanvas();
@@ -1603,14 +1600,15 @@ async function getExistingShapes(roomId: string): Promise<Shape[]> {
                 if (typeof parsed === "string") {
                     parsed = JSON.parse(parsed);
                 }
-                // Validate: only accept known vector shape types (skip legacy eraser strokes)
+                // Validate: only accept known vector shape types and eraser
                 if (parsed && (
                     parsed.type === "rect" || 
                     parsed.type === "circle" ||
                     parsed.type === "arrow" ||
                     parsed.type === "triangle" ||
                     parsed.type === "pencil" ||
-                    parsed.type === "text"
+                    parsed.type === "text" ||
+                    parsed.type === "eraser"
                 )) {
                     shapes.push(parsed as Shape);
                 }
