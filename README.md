@@ -35,9 +35,15 @@ The codebase is built as a high-performance **Turborepo monorepo** with **Next.j
 | **Arrow** | → | Directional arrows with calculated head tips |
 | **Triangle** | △ | Geometric triangle outlines |
 | **Text** | T | Dynamic inline canvas text labels |
-| **Eraser** | ◌ | Custom canvas shape eraser tool |
+| **Eraser** | ◌ | Vector stroke-splitting eraser (splits shapes into sub-strokes without masks or ghost holes) |
 | **Select** | ↖ | Select, drag, translate, and live re-style existing drawn shapes |
 | **Hand** | ✋ | Pan tool to move across the infinite canvas |
+
+### 🧼 Vector-Splitting Eraser Engine
+- **Dynamic Geometric Splitting**: Erasing shapes (pencil, rectangle, circle, arrow, triangle) mathematically splits them into discrete sub-strokes rather than deleting entire objects or relying on canvas cutout masks.
+- **Zero Masking Artifacts (No Invisible Holes)**: Eliminates canvas-wide `destination-out` masks so newly drawn shapes in previously erased areas are never clipped.
+- **Accurate Selection Bounds**: Partially erased shapes immediately update their vector coordinates; selecting them displays tight bounding boxes corresponding strictly to remaining segments.
+- **Multiplayer & Undo/Redo Synchronization**: Old shapes are removed and replacement sub-strokes are broadcast in real time across WebSockets (`delete_shape` + `chat`), with full multi-level undo/redo support.
 
 ### 🌈 Live Formatting & Style System
 - **Color Palette (8 Curated Colors)**: White (`#FFFFFF`), Red (`#EF4444`), Orange (`#F97316`), Yellow (`#EAB308`), Green (`#22C55E`), Blue (`#3B82F6`), Purple (`#A855F7`), Pink (`#EC4899`).
@@ -59,7 +65,7 @@ The codebase is built as a high-performance **Turborepo monorepo** with **Next.j
 - **One-Click Share**: Copy direct room access link (`/canvas/<roomId>`) to clipboard.
 
 ### ↩️ History & Export Options
-- **Multi-Level Undo / Redo**: Multi-level state history tracking for shape additions and deletions.
+- **Multi-Level Undo / Redo**: Multi-level state history tracking for shape additions, deletions, and eraser replacements.
 - **Multi-Format Export**: Export canvas drawings as **PNG**, **SVG**, or raw shape **JSON** files.
 
 ### 🖥️ Modern Responsive Dark UI
