@@ -1,328 +1,462 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   Pencil,
-  Shapes,
-  Share2,
-  Download,
-  Users,
-  Zap,
+  Square,
+  Circle,
   ArrowRight,
+  Triangle,
+  Type,
+  Eraser,
+  MousePointer,
+  Hand,
+  Download,
+  Share2,
+  Users,
+  MessageSquare,
   CheckCircle2,
-  Star,
   Menu,
   X,
-  MousePointer2,
-  Type,
-  Image,
+  Undo2,
+  Redo2,
   Layers,
+  ExternalLink,
   Sparkles,
-  Infinity,
-} from 'lucide-react';
+} from "lucide-react";
 
-function App() {
+export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [quickRoom, setQuickRoom] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const handleJoinQuickRoom = (e: FormEvent) => {
+    e.preventDefault();
+    if (quickRoom.trim()) {
+      const target = `/canvas/${encodeURIComponent(quickRoom.trim().toLowerCase())}`;
+      router.push(target);
+    } else {
+      handleCreateRandomRoom();
+    }
+  };
+
+  const handleCreateRandomRoom = () => {
+    const randomId = Math.random().toString(36).substring(2, 9);
+    router.push(`/canvas/${randomId}`);
+  };
+
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
-      {/* Nav */}
+    <div className="min-h-screen bg-[#090a0f] text-white selection:bg-sky-500/30 selection:text-sky-200">
+      {/* Top Navigation */}
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-[#0a0a0f]/90 backdrop-blur-md border-b border-white/5' : ''
-          }`}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+          scrolled ? "bg-[#090a0f]/90 backdrop-blur-md border-b border-white/10" : "bg-transparent"
+        }`}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
-              <Pencil className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+              <Pencil className="w-4 h-4" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">Sketcher</span>
+            <span className="text-base font-semibold tracking-tight text-white/90">Sketcher</span>
+            <span className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/50">
+              v1.0 • open source
+            </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm text-white/60">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#showcase" className="hover:text-white transition-colors">Showcase</a>
+          <nav className="hidden md:flex items-center gap-6 text-sm text-white/60">
+            <a href="#canvas-preview" className="hover:text-white transition-colors">Preview</a>
+            <a href="#features" className="hover:text-white transition-colors">Capabilities</a>
+            <a href="#shortcuts" className="hover:text-white transition-colors">Shortcuts</a>
+            <a
+              href="https://github.com/sarthakt28/sketcher-app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-white transition-colors text-white/50"
+            >
+              <GithubIcon className="w-4 h-4" />
+              <span>GitHub</span>
+            </a>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            <a href="/signin" className="text-sm text-white/60 hover:text-white transition-colors px-4 py-2">
-              Sign in
-            </a>
             <a
-              href="/canvas"
-              className="text-sm bg-sky-500 hover:bg-sky-400 transition-colors px-4 py-2 rounded-lg font-medium"
+              href="/signin"
+              className="text-xs uppercase font-medium tracking-wider text-white/60 hover:text-white px-3 py-2 transition-colors"
             >
-              Try for free
+              Sign In
             </a>
+            <button
+              onClick={handleCreateRandomRoom}
+              className="text-xs uppercase tracking-wider font-semibold bg-white text-black hover:bg-white/90 px-4 py-2 rounded-lg transition-all shadow-sm"
+            >
+              Start Drawing
+            </button>
           </div>
 
           <button
-            className="md:hidden text-white/70 hover:text-white"
+            className="md:hidden text-white/70 hover:text-white p-1"
             onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Toggle Navigation Menu"
           >
             {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
 
         {menuOpen && (
-          <div className="md:hidden bg-[#0e0e18] border-t border-white/5 px-6 py-4 flex flex-col gap-4 text-sm">
-            <a href="#features" className="text-white/60 hover:text-white" onClick={() => setMenuOpen(false)}>Features</a>
-            <a href="#showcase" className="text-white/60 hover:text-white" onClick={() => setMenuOpen(false)}>Showcase</a>
-            <div className="pt-2 flex flex-col gap-2">
-              <a href="/signin" className="text-center py-2 text-white/60 hover:text-white">Sign in</a>
-              <a href="/canvas" className="text-center py-2 bg-sky-500 hover:bg-sky-400 rounded-lg font-medium">Try for free</a>
+          <div className="md:hidden bg-[#0d0e14] border-b border-white/10 px-6 py-4 flex flex-col gap-3 text-sm">
+            <a href="#canvas-preview" className="text-white/60 hover:text-white py-1" onClick={() => setMenuOpen(false)}>Preview</a>
+            <a href="#features" className="text-white/60 hover:text-white py-1" onClick={() => setMenuOpen(false)}>Capabilities</a>
+            <a href="#shortcuts" className="text-white/60 hover:text-white py-1" onClick={() => setMenuOpen(false)}>Shortcuts</a>
+            <a
+              href="https://github.com/sarthakt28/sketcher-app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-white/60 hover:text-white py-1"
+            >
+              <GithubIcon className="w-4 h-4" /> GitHub Repository
+            </a>
+            <div className="pt-2 border-t border-white/10 flex flex-col gap-2">
+              <a href="/signin" className="text-center py-2 text-white/60 hover:text-white">Sign In</a>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleCreateRandomRoom();
+                }}
+                className="w-full text-center py-2.5 bg-white text-black font-semibold rounded-lg"
+              >
+                Start Drawing
+              </button>
             </div>
           </div>
         )}
       </header>
 
-      {/* Hero */}
-      <section className="relative pt-32 pb-24 px-6 text-center overflow-hidden">
-        {/* Background glow */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-sky-500/10 rounded-full blur-[120px]" />
-          <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-blue-600/8 rounded-full blur-[80px]" />
-          <div className="absolute top-1/2 right-1/4 w-[300px] h-[300px] bg-cyan-400/8 rounded-full blur-[80px]" />
-        </div>
-
-        {/* Grid background */}
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-16 px-6 text-center overflow-hidden">
+        {/* Subtle engineering grid background */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-[0.03]"
+          className="absolute inset-0 pointer-events-none opacity-[0.025]"
           style={{
-            backgroundImage:
-              'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
+            backgroundImage: "radial-gradient(circle, #ffffff 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
           }}
         />
 
-        <div className="relative max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-sm text-white/60 mb-8">
-            <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-            <span>Open-source diagramming, reimagined</span>
+        <div className="relative max-w-4xl mx-auto">
+          {/* Natural status pill */}
+          <div className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-full px-3.5 py-1 text-xs text-white/70 mb-6">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Low-latency collaborative canvas with Vector-Splitting Eraser</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
-            Draw ideas that{' '}
-            <span className="bg-gradient-to-r from-sky-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              come alive
-            </span>
+          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.15] mb-5 text-white/95">
+            A fast, distraction-free whiteboard for diagramming and thinking out loud.
           </h1>
 
-          <p className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto leading-relaxed mb-10">
-            Sketcher is a fast, beautiful canvas for brainstorming, wireframing, and
-            diagramming — built for those who think visually.
+          <p className="text-base sm:text-lg text-white/50 max-w-2xl mx-auto leading-relaxed mb-8">
+            Sketch architectural flows, draw wireframes, and collaborate with your team in real time.
+            Zero bloat, no forced sign-ups, and works directly in your browser.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="/signup"
-              className="group flex items-center gap-2 bg-sky-500 hover:bg-sky-400 transition-all px-6 py-3 rounded-xl font-semibold text-sm shadow-lg shadow-sky-500/20"
-            >
-              Start sketching
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </a>
+          {/* Quick Start Room Input */}
+          <div className="max-w-md mx-auto mb-6">
+            <form onSubmit={handleJoinQuickRoom} className="flex flex-col sm:flex-row items-center gap-2">
+              <div className="relative w-full">
+                <input
+                  type="text"
+                  placeholder="Enter a room name (e.g. system-design)"
+                  value={quickRoom}
+                  onChange={(e) => setQuickRoom(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white/[0.05] border border-white/15 focus:border-sky-500 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none transition-colors"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white font-medium text-sm px-5 py-2.5 rounded-xl transition-colors shadow-lg shadow-sky-500/15"
+              >
+                <span>Open Room</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-white/30">
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-sky-400" /> No sign-up required</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-sky-400" /> Completely free</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-sky-400" /> Open source</span>
+          <div className="flex items-center justify-center gap-4 text-xs text-white/40">
+            <button
+              onClick={handleCreateRandomRoom}
+              className="underline hover:text-white/80 transition-colors"
+            >
+              Or create an instant anonymous room →
+            </button>
           </div>
         </div>
 
-        {/* Hero canvas mockup */}
-        <div className="relative max-w-5xl mx-auto mt-16">
-          <div className="rounded-2xl border border-white/10 bg-[#0e0e18] overflow-hidden shadow-2xl shadow-black/60">
-            {/* Toolbar */}
-            <div className="flex items-center gap-0.5 p-3 bg-[#13131f] border-b border-white/5">
-              <div className="w-3 h-3 rounded-full bg-red-500/80 mr-1" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/80 mr-1" />
-              <div className="w-3 h-3 rounded-full bg-green-500/80 mr-4" />
-              {[MousePointer2, Pencil, Shapes, Type, Image].map((Icon, i) => (
-                <button
-                  key={i}
-                  className={`p-2 rounded-lg transition-colors ${i === 1 ? 'bg-sky-500/20 text-sky-400' : 'text-white/30 hover:text-white/60 hover:bg-white/5'}`}
-                >
-                  <Icon className="w-4 h-4" />
-                </button>
-              ))}
+        {/* Real Product UI Mockup */}
+        <div id="canvas-preview" className="relative max-w-5xl mx-auto mt-14 text-left">
+          <div className="rounded-2xl border border-white/15 bg-[#0f1017] shadow-2xl overflow-hidden">
+            {/* Top Toolbar matching actual Sketcher app */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[#14151f] border-b border-white/10 text-xs text-white/70">
+              <div className="flex items-center gap-1 overflow-x-auto py-1">
+                <div className="flex items-center gap-1 pr-3 border-r border-white/10">
+                  <span className="p-1.5 rounded-lg bg-white/10 text-white" title="Select (V)"><MousePointer className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Hand (H)"><Hand className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Pencil (P)"><Pencil className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Rectangle (R)"><Square className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Circle (C)"><Circle className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Triangle (T)"><Triangle className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Arrow (A)"><ArrowRight className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg text-white/50 hover:bg-white/5" title="Text"><Type className="w-3.5 h-3.5" /></span>
+                  <span className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 font-medium flex items-center gap-1" title="Eraser (E)">
+                    <Eraser className="w-3.5 h-3.5" />
+                    <span className="text-[10px] hidden sm:inline">Vector Eraser</span>
+                  </span>
+                </div>
+
+                {/* Color swatches */}
+                <div className="flex items-center gap-1.5 pl-3">
+                  {["#FFFFFF", "#EF4444", "#F97316", "#EAB308", "#22C55E", "#3B82F6", "#A855F7"].map((color) => (
+                    <span
+                      key={color}
+                      className="w-3.5 h-3.5 rounded-full border border-black/40"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Status and Action Buttons */}
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Sync (WebSocket)
+                </span>
+                <span className="text-[11px] text-white/40 font-mono hidden sm:inline">Zoom: 100%</span>
+              </div>
             </div>
 
-            {/* Canvas area */}
-            <div className="relative h-[380px] bg-[#0c0c16] overflow-hidden">
+            {/* Canvas Body with Authentic Architecture Sketch */}
+            <div className="relative h-[360px] sm:h-[420px] bg-[#0c0d14] overflow-hidden select-none">
+              {/* Dot Grid */}
               <div
-                className="absolute inset-0 opacity-[0.04]"
+                className="absolute inset-0 opacity-[0.06]"
                 style={{
-                  backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-                  backgroundSize: '32px 32px',
+                  backgroundImage: "radial-gradient(circle, #ffffff 1px, transparent 1px)",
+                  backgroundSize: "24px 24px",
                 }}
               />
 
-              {/* Sketch elements */}
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 900 380">
+              {/* Real Diagram SVG */}
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 920 420">
                 <defs>
-                  <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                    <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+                  <marker id="marker-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#38bdf8" />
+                  </marker>
+                  <marker id="marker-muted" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#64748b" />
                   </marker>
                 </defs>
 
-                <rect x="80" y="80" width="180" height="110" rx="8" fill="none" stroke="#38bdf8" strokeWidth="2" strokeDasharray="6 3" opacity="0.7" />
-                <text x="170" y="141" textAnchor="middle" fill="#94a3b8" fontSize="13" fontFamily="sans-serif">Component A</text>
+                {/* Node 1: Client Browser */}
+                <rect x="70" y="80" width="200" height="120" rx="10" fill="#141522" stroke="#38bdf8" strokeWidth="2" />
+                <text x="170" y="125" textAnchor="middle" fill="#ffffff" fontSize="14" fontWeight="600" fontFamily="sans-serif">Next.js 16 Web App</text>
+                <text x="170" y="148" textAnchor="middle" fill="#94a3b8" fontSize="12" fontFamily="sans-serif">HTML5 Canvas Engine</text>
+                <text x="170" y="170" textAnchor="middle" fill="#38bdf8" fontSize="10" fontFamily="monospace">Port :3000</text>
 
-                <path d="M260 135 L340 135" stroke="#475569" strokeWidth="1.5" markerEnd="url(#arrow)" />
+                {/* Arrow 1 to WS Gateway */}
+                <path d="M270 140 L370 140" stroke="#38bdf8" strokeWidth="2" markerEnd="url(#marker-arrow)" />
+                <text x="320" y="130" textAnchor="middle" fill="#38bdf8" fontSize="10" fontFamily="monospace">ws: // live</text>
 
-                <rect x="340" y="80" width="180" height="110" rx="8" fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.5" />
-                <text x="430" y="141" textAnchor="middle" fill="#94a3b8" fontSize="13" fontFamily="sans-serif">Component B</text>
+                {/* Node 2: WS Backend */}
+                <rect x="370" y="80" width="200" height="120" rx="10" fill="#141522" stroke="#22c55e" strokeWidth="2" />
+                <text x="470" y="125" textAnchor="middle" fill="#ffffff" fontSize="14" fontWeight="600" fontFamily="sans-serif">WebSocket Gateway</text>
+                <text x="470" y="148" textAnchor="middle" fill="#94a3b8" fontSize="12" fontFamily="sans-serif">Live Stroke Broadcast</text>
+                <text x="470" y="170" textAnchor="middle" fill="#22c55e" fontSize="10" fontFamily="monospace">Port :8080</text>
 
-                <path d="M560 100 Q580 80 600 100 Q620 120 640 95 Q660 70 680 100" fill="none" stroke="#f472b6" strokeWidth="2" opacity="0.6" />
+                {/* Arrow 2 to Database */}
+                <path d="M470 200 L470 270" stroke="#64748b" strokeWidth="2" markerEnd="url(#marker-muted)" />
+                <text x="520" y="240" textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="monospace">Prisma Client</text>
 
-                <rect x="560" y="160" width="150" height="90" rx="4" fill="#fef08a" opacity="0.08" />
-                <text x="635" y="200" textAnchor="middle" fill="#fef08a" fontSize="11" fontFamily="sans-serif" opacity="0.8">Design notes</text>
-                <text x="635" y="218" textAnchor="middle" fill="#fef08a" fontSize="10" fontFamily="sans-serif" opacity="0.5">Refine border radius</text>
+                {/* Node 3: PostgreSQL */}
+                <rect x="370" y="270" width="200" height="90" rx="10" fill="#141522" stroke="#a855f7" strokeWidth="1.5" />
+                <text x="470" y="310" textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="600" fontFamily="sans-serif">PostgreSQL 16</text>
+                <text x="470" y="332" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontFamily="sans-serif">Shape &amp; Chat Storage</text>
 
-                <ellipse cx="170" cy="280" rx="70" ry="22" fill="none" stroke="#34d399" strokeWidth="1.5" opacity="0.6" />
-                <rect x="100" y="280" width="140" height="40" fill="none" stroke="#34d399" strokeWidth="1.5" opacity="0.6" />
-                <ellipse cx="170" cy="320" rx="70" ry="22" fill="none" stroke="#34d399" strokeWidth="1.5" opacity="0.6" />
-                <text x="170" y="303" textAnchor="middle" fill="#6ee7b7" fontSize="11" fontFamily="sans-serif" opacity="0.8">Database</text>
+                {/* Vector Stroke Cut Demo Annotation */}
+                <path d="M640 100 Q670 70 700 100 Q730 130 760 100" fill="none" stroke="#f472b6" strokeWidth="2.5" />
+                <text x="700" y="80" textAnchor="middle" fill="#f472b6" fontSize="11" fontFamily="monospace">splitStrokeWithEraser()</text>
 
-                <path d="M170 258 L170 135 L260 135" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 2" opacity="0.5" />
+                {/* Simulated Real Eraser Circle */}
+                <circle cx="700" cy="100" r="16" fill="rgba(239, 68, 68, 0.15)" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 3" />
+                <text x="735" y="135" fill="#f87171" fontSize="10" fontFamily="sans-serif">← Real stroke splitting</text>
 
-                <g transform="translate(430 220)">
-                  <path d="M0 0 L0 18 L5 13 L9 20 L11 19 L7 12 L14 12 Z" fill="white" opacity="0.9" />
-                  <circle cx="0" cy="0" r="3" fill="#38bdf8" opacity="0.6" />
+                {/* Simulated Collaborator Cursor */}
+                <g transform="translate(230, 240)">
+                  <path d="M0 0 L0 18 L5 13 L9 20 L11 19 L7 12 L14 12 Z" fill="#38bdf8" />
+                  <rect x="14" y="12" width="75" height="18" rx="4" fill="#0284c7" />
+                  <text x="18" y="25" fill="#ffffff" fontSize="10" fontWeight="500" fontFamily="sans-serif">Sarah (online)</text>
                 </g>
               </svg>
+
+              {/* Mini Collapsible Chat Overlay Preview */}
+              <div className="absolute bottom-4 right-4 w-64 bg-[#141520]/95 border border-white/10 rounded-xl p-3 shadow-xl backdrop-blur-sm hidden sm:block">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10 text-[11px] text-white/50">
+                  <span className="flex items-center gap-1.5 text-white/80 font-medium">
+                    <MessageSquare className="w-3 h-3 text-sky-400" /> Room Discussion
+                  </span>
+                  <span>2 online</span>
+                </div>
+                <div className="space-y-1.5 text-[11px]">
+                  <p className="text-white/60"><span className="text-sky-400 font-medium">Sarah:</span> "Erase the old endpoint node"</p>
+                  <p className="text-white/60"><span className="text-emerald-400 font-medium">You:</span> "Done, updated architecture."</p>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="absolute -bottom-px left-0 right-0 h-24 bg-gradient-to-t from-[#0a0a0f] to-transparent pointer-events-none" />
+        </div>
+
+        {/* Keyboard Shortcuts Dock */}
+        <div id="shortcuts" className="max-w-4xl mx-auto mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-white/50 font-mono">
+          <span className="text-white/30 mr-1">Hotkeys:</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">P Pencil</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">R Rectangle</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">C Circle</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">A Arrow</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">E Eraser</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">V Select</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">Space + Drag Pan</span>
+          <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70">Ctrl + Z Undo</span>
         </div>
       </section>
 
-
-
-      {/* Features */}
-      <section id="features" className="py-28 px-6">
+      {/* Concrete Capabilities Section */}
+      <section id="features" className="py-24 px-6 border-t border-white/5 bg-[#0b0c12]">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-sky-400 text-sm font-medium uppercase tracking-widest mb-3">Features</p>
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              Everything you need to sketch
+          <div className="max-w-2xl mb-16">
+            <p className="text-sky-400 text-xs font-mono uppercase tracking-widest mb-2">Capabilities</p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+              Engineered for seamless sketching.
             </h2>
-            <p className="text-white/40 text-lg max-w-xl mx-auto">
-              Powerful tools that feel natural. From rough ideas to polished diagrams in seconds.
+            <p className="text-white/50 text-base leading-relaxed">
+              Every detail is designed to feel responsive, accurate, and reliable during high-speed team discussions.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { icon: Infinity, title: 'Infinite Canvas', desc: 'Scroll to zoom, pan to explore. An endless drawing board that expands in every direction with your ideas.', color: 'sky' },
-              { icon: Users, title: 'Real-Time Collaboration', desc: 'Draw with your team live. Share the URL and watch changes sync instantly with zero latency via WebSockets.', color: 'sky' },
-              { icon: Share2, title: 'One-Click Sharing', desc: 'Share your workspace instantly. One click copies the direct room URL to your clipboard for instant collaboration.', color: 'blue' },
-              { icon: Pencil, title: 'Freehand Drawing', desc: 'Draw naturally with a stylus or mouse. Smart shape recognition converts rough sketches into clean geometry.', color: 'sky' },
-              { icon: Download, title: 'Export Anywhere', desc: 'Export to PNG, SVG, or JSON. Drop your diagrams into any doc or presentation.', color: 'sky' },
-              { icon: Zap, title: 'Blazing Fast', desc: 'Built on a performant rendering engine. Handles thousands of elements without breaking a sweat.', color: 'blue' },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div
-                key={title}
-                className="group bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] hover:border-white/[0.12] rounded-2xl p-6 transition-all duration-300"
-              >
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mb-4">
-                  <Icon className="w-5 h-5 text-sky-400" />
-                </div>
-                <h3 className="font-semibold mb-2">{title}</h3>
-                <p className="text-sm text-white/40 leading-relaxed">{desc}</p>
+          <div className="grid md:grid-cols-3 gap-5">
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <Eraser className="w-4 h-4" />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Showcase */}
-      <section id="showcase" className="py-24 px-6 overflow-hidden">
-        <div className="max-w-6xl mx-auto">
-
-
-          {/* Export row */}
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="order-2 md:order-1 relative">
-              <div className="rounded-2xl border border-white/10 bg-[#0e0e18] p-5 shadow-2xl shadow-black/40">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs text-white/40 font-medium uppercase tracking-wider">Export options</span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  {[
-                    { fmt: 'PNG', desc: 'High resolution', color: '#38bdf8' },
-                    { fmt: 'SVG', desc: 'Vector format', color: '#2dd4bf' },
-                    { fmt: 'JSON', desc: 'Raw data', color: '#60a5fa' },
-                  ].map(({ fmt, desc, color }) => (
-                    <div key={fmt} className="rounded-xl p-4 text-center" style={{ background: `${color}12`, border: `1px solid ${color}30` }}>
-                      <div className="font-bold text-lg mb-1" style={{ color }}>{fmt}</div>
-                      <div className="text-white/30 text-xs">{desc}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-white/5 rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium mb-0.5">flowchart-v2.png</div>
-                    <div className="text-xs text-white/30">2048 x 1536 · 340 KB</div>
-                  </div>
-                  <button className="bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 text-sky-400 text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </button>
-                </div>
-              </div>
-              <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl" />
-            </div>
-            <div className="order-1 md:order-2">
-              <p className="text-teal-400 text-sm font-medium uppercase tracking-widest mb-3">Export</p>
-              <h2 className="text-4xl font-bold tracking-tight mb-5 leading-tight">
-                Take your diagrams anywhere
-              </h2>
-              <p className="text-white/40 text-lg leading-relaxed mb-8">
-                Export pixel-perfect images or developer-ready SVGs. Copy-paste straight into Notion, Confluence, or your favorite doc editor.
+              <h3 className="text-base font-semibold mb-2">Vector-Splitting Eraser</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                True geometric polyline mutation. Touching any shape splits it into clean sub-strokes without leaving invisible cutout masks or clipping new drawings.
               </p>
-              <ul className="space-y-3">
-                {['PNG, SVG & JSON exports', 'Copy as image shortcut', 'Embed in Notion & Confluence', 'Dark and light backgrounds'].map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-sm text-white/60">
-                    <CheckCircle2 className="w-4 h-4 text-teal-400 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
+            </div>
+
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <Layers className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">Infinite Zoom &amp; Pan</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                Smooth scaling from 10% to 2000%. Includes 2-finger touch gestures with gesture-mutex locking to eliminate accidental palm lines on touchscreens.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <Users className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">Sub-Millisecond Sync</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                Lightweight WebSocket protocol transmits vector points with zero lag. Automatically reconnects with exponential backoff if your connection drops.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">In-Room Live Chat</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                Docked collapsible sidebar with tab-isolated session identities and floating unread message badges, so teammates don't talk over each other.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <Download className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">Lossless Export</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                Export to high-resolution PNG, resolution-independent vector SVG, or raw JSON shape snapshots to drop diagrams straight into docs or presentations.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl bg-white/[0.02] border border-white/[0.08] hover:border-white/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 mb-4">
+                <Share2 className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-semibold mb-2">One-Click Share</h3>
+              <p className="text-sm text-white/50 leading-relaxed">
+                Copy the direct room link to your clipboard. Anyone who opens the URL immediately syncs with your current canvas state and database history.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Developer / Open Source Banner */}
+      <section className="py-20 px-6 border-t border-white/5 bg-[#090a0f]">
+        <div className="max-w-4xl mx-auto rounded-2xl bg-white/[0.02] border border-white/10 p-8 sm:p-12 text-center">
+          <h3 className="text-2xl sm:text-3xl font-bold mb-3">
+            Open source &amp; self-hostable.
+          </h3>
+          <p className="text-white/50 text-sm sm:text-base max-w-xl mx-auto mb-8 leading-relaxed">
+            Built as a Turborepo monorepo with Next.js 16, Express, WebSocket gateways, and Prisma ORM. Inspect the source or deploy your own private instance.
+          </p>
 
-
-
-
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
-              <Pencil className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-semibold">Sketcher</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a href="https://github.com/sarthakt28/sketcher-app" target="_blank" rel="noopener noreferrer" className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-colors text-white/40 hover:text-white">
-              <GithubIcon className="w-4 h-4" />
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={handleCreateRandomRoom}
+              className="bg-white text-black font-semibold text-xs uppercase tracking-wider px-6 py-3 rounded-xl hover:bg-white/90 transition-all shadow-md"
+            >
+              Launch Whiteboard
+            </button>
+            <a
+              href="https://github.com/sarthakt28/sketcher-app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition-all"
+            >
+              <GithubIcon className="w-4 h-4" /> View On GitHub
             </a>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto mt-8 pt-8 border-t border-white/5 text-center text-xs text-white/20">
-          2026 © Sketcher. All rights reserved.
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-10 px-6 text-xs text-white/40">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-white/70 font-medium">
+            <Pencil className="w-4 h-4 text-sky-400" />
+            <span>Sketcher Whiteboard</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <a href="https://github.com/sarthakt28/sketcher-app" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+              MIT License
+            </a>
+            <a href="https://github.com/sarthakt28/sketcher-app" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+              GitHub Source
+            </a>
+          </div>
         </div>
       </footer>
     </div>
@@ -347,7 +481,3 @@ function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
-
-
-export default App;
