@@ -82,6 +82,20 @@ async function getOrPerformDevLogin(): Promise<string> {
     return globalAuthPromise;
 }
 
+function getClientParticipantId(): string {
+    if (typeof window === "undefined") return "";
+    const storedEmail = localStorage.getItem("userEmail");
+    if (storedEmail && storedEmail !== "dev-user@example.com") {
+        return `user_${storedEmail.trim().toLowerCase()}`;
+    }
+    let clientId = localStorage.getItem("sketcher_client_id");
+    if (!clientId) {
+        clientId = "client_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+        localStorage.setItem("sketcher_client_id", clientId);
+    }
+    return clientId;
+}
+
 export function RoomCanvas({roomId}:{
     roomId: string;
 }){
@@ -119,8 +133,9 @@ export function RoomCanvas({roomId}:{
             console.log(`[RoomCanvas] Connecting to WebSocket (attempt ${retryCount + 1})...`);
             
             try {
+                const participantId = getClientParticipantId();
                 const resolvedWsUrl = getWsUrl(WS_URL);
-                const socketInstance = new WebSocket(`${resolvedWsUrl}?token=${token}`);
+                const socketInstance = new WebSocket(`${resolvedWsUrl}?token=${token}&clientId=${encodeURIComponent(participantId)}`);
                 ws = socketInstance;
                 
                 socketInstance.onopen = () => {
@@ -135,7 +150,8 @@ export function RoomCanvas({roomId}:{
                     setSocket(socketInstance);
                     socketInstance.send(JSON.stringify({
                         type: "join",
-                        roomId
+                        roomId,
+                        clientId: participantId
                     }));
 
                     // Send ping heartbeats every 15s to keep reverse proxies (Render, AWS, Cloudflare) from terminating idle connections

@@ -24,6 +24,7 @@ const wss = new WebSocketServer({ server });
 interface User{
   ws: WebSocket;
   userId: string;
+  clientId?: string;
   rooms: string[];
 }
 
@@ -56,9 +57,21 @@ function broadcastRoomUserCount(roomId: string) {
   if (!cleanRoomId) return;
 
   const roomUsers = getRoomUsers(cleanRoomId);
-  const count = roomUsers.length;
 
-  console.log(`[WS] Broadcasting user count for room '${cleanRoomId}': ${count} online across ${roomUsers.length} connections`);
+  // Deduplicate connections from the same user/machine:
+  // Multiple tabs in the same browser share the same clientId (or registered user account).
+  const uniqueParticipants = new Set<string>();
+
+  roomUsers.forEach(u => {
+    const key = (u.clientId && u.clientId.trim())
+      ? `client_${u.clientId.trim()}`
+      : `user_${String(u.userId).trim()}`;
+    uniqueParticipants.add(key);
+  });
+
+  const count = Math.max(1, uniqueParticipants.size);
+
+  console.log(`[WS] Broadcasting user count for room '${cleanRoomId}': ${count} unique online (${uniqueParticipants.size} unique across ${roomUsers.length} open socket connections)`);
 
   const payload = JSON.stringify({
     type: "room_user_count",
@@ -120,7 +133,8 @@ wss.on("connection", function connection(ws, request) {
   }
   const queryParams = new URLSearchParams(url.split('?')[1]);
   const token = queryParams.get('token') || "";
-  console.log(`[WS] New connection attempt with token: ${token ? (token.substring(0, 15) + "...") : "none"}`);
+  const initialClientId = queryParams.get('clientId') || "";
+  console.log(`[WS] New connection attempt with token: ${token ? (token.substring(0, 15) + "...") : "none"}, clientId: ${initialClientId || "none"}`);
   const userId = checkUser(token);
 
   if(userId == null){
@@ -134,13 +148,13 @@ wss.on("connection", function connection(ws, request) {
     (ws as any).isAlive = true;
   });
 
-  console.log(`[WS] Connection authenticated successfully. User ID: ${userId}`);
+  console.log(`[WS] Connection authenticated successfully. User ID: ${userId}, Client ID: ${initialClientId || "anonymous"}`);
 
   users.push({
     userId,
+    clientId: initialClientId,
     rooms: [],
     ws
-
   })
   
 async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number): Promise<number | null> {
@@ -187,10 +201,13 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
       const user = users.find(x => x.ws == ws);
       const rawRoomId = String(parsedData.roomId || "").trim();
       if (user && rawRoomId) {
+        if (parsedData.clientId && typeof parsedData.clientId === "string") {
+          user.clientId = parsedData.clientId.trim();
+        }
         if (!user.rooms.includes(rawRoomId)) {
           user.rooms.push(rawRoomId);
         }
-        console.log(`[WS] User ${userId} joined room ${rawRoomId}`);
+        console.log(`[WS] User ${userId} (clientId: ${user.clientId || "none"}) joined room ${rawRoomId}`);
 
         // Link both numeric ID and slug so room broadcasts match regardless of client representation
         const numId = parseInt(rawRoomId);
@@ -228,6 +245,10 @@ async function resolveNumericRoomId(roomIdStr: string, fallbackUserId?: number):
 
     if (parsedData.type === "get_user_count") {
       const rawRoomId = String(parsedData.roomId || "").trim();
+      const user = users.find(x => x.ws == ws);
+      if (user && parsedData.clientId && typeof parsedData.clientId === "string") {
+        user.clientId = parsedData.clientId.trim();
+      }
       if (rawRoomId) {
         broadcastRoomUserCount(rawRoomId);
       }

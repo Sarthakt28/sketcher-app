@@ -281,7 +281,16 @@ export function Canvas({ roomId, socket }: { roomId: string; socket: WebSocket |
         const sendGetCount = () => {
             if (socket.readyState === WebSocket.OPEN) {
                 try {
-                    socket.send(JSON.stringify({ type: "get_user_count", roomId }));
+                    let clientId = "";
+                    if (typeof window !== "undefined") {
+                        const storedEmail = localStorage.getItem("userEmail");
+                        if (storedEmail && storedEmail !== "dev-user@example.com") {
+                            clientId = `user_${storedEmail.trim().toLowerCase()}`;
+                        } else {
+                            clientId = localStorage.getItem("sketcher_client_id") || "";
+                        }
+                    }
+                    socket.send(JSON.stringify({ type: "get_user_count", roomId, clientId }));
                 } catch (e) {}
             }
         };
