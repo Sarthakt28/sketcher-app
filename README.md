@@ -81,17 +81,14 @@ sketcher/
 ├── apps/
 │   ├── web/                 # Next.js 16 Web App (Landing, Auth, Canvas, Chat)   → Port 3000
 │   ├── http-backend/        # Express REST API (Auth, Rooms, Shape/Chat History) → Port 3002
-│   ├── ws-backend/          # WebSocket Gateway (Live Shape & Chat Broadcast)    → Port 8080
-│   └── docs/                # Developer Documentation App                        → Port 3001
+│   └── ws-backend/          # WebSocket Gateway (Live Shape & Chat Broadcast)    → Port 8080
 ├── packages/
 │   ├── db/                  # Prisma ORM client & PostgreSQL database schema
 │   ├── common/              # Shared Zod validation schemas & TypeScript types
 │   ├── backend-common/      # Shared backend utilities & JWT configuration
-│   ├── ui/                  # Shared React UI component library
 │   ├── typescript-config/   # Shared tsconfig base files
 │   └── eslint-config/       # Shared ESLint linting rules
 ├── docker-compose.yml       # Monorepo Docker orchestration (Dev)
-├── docker-compose.prod.yml  # Monorepo Docker orchestration (Prod)
 └── turbo.json               # Turborepo task pipeline configuration
 ```
 
@@ -184,7 +181,6 @@ pnpm run dev
 | Service | URL / Port | Description |
 | :--- | :--- | :--- |
 | 🎨 **Sketcher Web & Canvas** | [http://localhost:3000](http://localhost:3000) | Main App (Landing `/`, Canvas `/canvas/[roomId]`, Auth) |
-| 📖 **Docs Workspace** | [http://localhost:3001](http://localhost:3001) | Developer documentation site |
 | ⚙️ **HTTP Express Backend** | [http://localhost:3002](http://localhost:3002) | REST endpoints (`/signup`, `/signin`, `/room`, `/chats`) |
 | 🔌 **WebSocket Server** | `ws://localhost:8080` | Multiplayer drawing & chat WebSocket gateway |
 

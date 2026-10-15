@@ -13,9 +13,6 @@
     "@repo/typescript-config#build": {
       "outputs": []
     },
-    "@repo/ui#build": {
-      "outputs": []
-    },
     "lint": {
       "dependsOn": ["^lint"]
     },
